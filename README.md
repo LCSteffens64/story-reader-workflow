@@ -3,6 +3,12 @@
 An automated video generation pipeline that transforms narration audio (or text scripts) into visual "story reader" videos with AI-generated imagery and optional background music.
 
 ---
+## USAGE
+```
+python -m story_reader -i narration.wav -o output/
+# or
+python main.py -i narration.wav -o output/
+```
 
 ## Overview
 
