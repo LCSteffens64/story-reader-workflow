@@ -49,7 +49,7 @@ class LLMKeywordExtractor:
                 # Use 4-bit quantization for memory efficiency
                 bnb_config = BitsAndBytesConfig(
                     load_in_4bit=True,
-                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_compute_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                     bnb_4bit_quant_type="nf4",
                     bnb_4bit_use_double_quant=True,
                 )
@@ -57,15 +57,13 @@ class LLMKeywordExtractor:
                 model = AutoModelForCausalLM.from_pretrained(
                     self.model_name,
                     quantization_config=bnb_config,
-                    device_map="auto" if self.device == "cuda" else None,
-                    torch_dtype=torch.float16,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                     trust_remote_code=True
                 )
             else:
                 model = AutoModelForCausalLM.from_pretrained(
                     self.model_name,
-                    device_map="auto" if self.device == "cuda" else None,
-                    torch_dtype=torch.float16,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                     trust_remote_code=True
                 )
             
@@ -98,21 +96,14 @@ class LLMKeywordExtractor:
             
             # Generate response
             with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=50,
-                    do_sample=False,
-                    temperature=0.1,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
+                outputs = self.model.generate(inputs, max_new_tokens=50, do_sample=False, temperature=0.1, pad_token_id=self.tokenizer.eos_token_id)
             
             # Decode response
             response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             
             # Extract keywords from response
             keywords = self._parse_keywords(response, max_keywords)
-            
-            return keywords
+            return keywords            
             
         except Exception as e:
             print(f"LLM keyword extraction failed: {e}")
