@@ -1,0 +1,17 @@
+{
+  "transcription": {
+    "status": "completed",
+    "start_time": "2026-02-04T14:18:28.331554",
+    "end_time": "2026-02-04T14:18:28.359695"
+  },
+  "paragraph_segmentation": {
+    "status": "completed",
+    "start_time": "2026-02-04T14:18:28.360278",
+    "end_time": "2026-02-04T14:18:28.360675"
+  },
+  "image_generation": {
+    "status": "running",
+    "start_time": "2026-02-04T14:18:28.361209",
+    "end_time": null
+  }
+}
