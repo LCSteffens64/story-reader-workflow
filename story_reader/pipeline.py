@@ -12,6 +12,10 @@ from .steps import (
     TranscriberStep,
     SegmenterStep,
     ImageGeneratorStep,
+    ImageUpscalerStep,
+    UpscaleMethod,
+    PexelsImageFetcherStep,
+    HybridImageGeneratorStep,
     VideoComposerStep,
     AudioMixerStep,
 )
@@ -66,7 +70,24 @@ class StoryReaderPipeline:
         """Initialize all pipeline steps."""
         self.transcriber = TranscriberStep(self.config, self.cache)
         self.segmenter = SegmenterStep(self.config, self.cache)
-        self.image_generator = ImageGeneratorStep(self.config, self.cache)
+        
+        # Use hybrid image generator that supports both Pexels and Stable Diffusion
+        self.image_generator = HybridImageGeneratorStep(self.config, self.cache)
+        
+        # Initialize upscaler if enabled
+        if self.config.upscale_images:
+            method = UpscaleMethod(self.config.upscale_method)
+            self.image_upscaler = ImageUpscalerStep(
+                self.config, 
+                self.cache,
+                scale_factor=self.config.upscale_factor,
+                method=method,
+                enhance_sharpness=self.config.upscale_sharpness,
+                enhance_contrast=self.config.upscale_contrast,
+            )
+        else:
+            self.image_upscaler = None
+        
         self.video_composer = VideoComposerStep(self.config, self.cache)
         self.audio_mixer = AudioMixerStep(self.config, self.cache)
     
@@ -97,6 +118,10 @@ class StoryReaderPipeline:
         
         # Step 3: Generate images
         images = self.image_generator.execute(paragraphs)
+        
+        # Step 3b: Upscale images (optional)
+        if self.image_upscaler:
+            images = self.image_upscaler.execute(images)
         
         # Step 4: Create Ken Burns video
         visuals_video = self.video_composer.execute((images, paragraphs))
@@ -150,3 +175,4 @@ class StoryReaderPipeline:
         """Clear all model caches to free memory."""
         TranscriberStep.clear_model_cache()
         ImageGeneratorStep.clear_pipeline_cache()
+        ImageUpscalerStep.clear_model_cache()

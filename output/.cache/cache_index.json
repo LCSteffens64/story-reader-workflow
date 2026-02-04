@@ -1,36 +1,9 @@
 {
   "transcription_ce6e3f2f9170baba27366a3ba26cc55b": {
+    "type": "transcription",
     "audio_file": "/home/Leon/Documents/Videos/story reader workflow/narration.wav",
-    "created": "2026-02-04T13:47:00.635250"
-  },
-  "image_000_c5f483abd525": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/000.png",
-    "text_preview": " This is the first test of the new system that I have developed in order to help me make  YouTube vi",
-    "created": "2026-02-04T14:22:05.718704"
-  },
-  "image_001_003a9cf30f5a": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/001.png",
-    "text_preview": " It uses an AI pipeline in order to interpret, spoken word, in recorded to a dot-wav file,  generate",
-    "created": "2026-02-04T14:26:17.203693"
-  },
-  "image_002_9edbb593e927": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/002.png",
-    "text_preview": " This should enable me to automate the process of making YouTube videos in an efficient manner.  I d",
-    "created": "2026-02-04T14:30:19.708008"
-  },
-  "image_003_8c73562b43e5": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/003.png",
-    "text_preview": " I was beginning to become a little bit disconcerted with my studies and I wanted to give  myself cr",
-    "created": "2026-02-04T14:35:07.857272"
-  },
-  "image_004_dbd65a9375c7": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/004.png",
-    "text_preview": " Using the AI tools which are now so widely spread, I decided to try to develop a software  stack in",
-    "created": "2026-02-04T14:39:59.693033"
-  },
-  "image_005_544b057d984f": {
-    "path": "/home/Leon/Documents/Videos/story reader workflow/output/005.png",
-    "text_preview": " I do not have any formal experience with AI engineering, but I have been automatically teaching  my",
-    "created": "2026-02-04T14:46:12.807760"
+    "audio_hash": "ce6e3f2f9170baba27366a3ba26cc55b",
+    "segment_count": 13,
+    "created": "2026-02-04T18:02:56.824496"
   }
 }

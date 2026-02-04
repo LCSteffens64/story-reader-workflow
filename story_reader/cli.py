@@ -95,6 +95,81 @@ For more information, see: https://github.com/your-repo/story-reader
         help="Skip audio muxing (output visuals only)"
     )
     
+    # Pexels options
+    parser.add_argument(
+        "--use-pexels",
+        action="store_true",
+        help="Use Pexels API for image fetching instead of Stable Diffusion"
+    )
+    parser.add_argument(
+        "--pexels-api-key",
+        type=str,
+        default=None,
+        help="Pexels API key (can also be set via PEXELS_API_KEY environment variable)"
+    )
+    parser.add_argument(
+        "--pexels-fallback",
+        action="store_true",
+        default=True,
+        help="Use Stable Diffusion if Pexels fails (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-pexels-fallback",
+        action="store_false",
+        dest="pexels_fallback",
+        help="Disable Stable Diffusion fallback when Pexels fails"
+    )
+    parser.add_argument(
+        "--pexels-max-results",
+        type=int,
+        default=5,
+        help="Maximum number of Pexels search results to consider (default: 5)"
+    )
+    parser.add_argument(
+        "--pexels-min-width",
+        type=int,
+        default=1920,
+        help="Minimum width for Pexels images (default: 1920)"
+    )
+    parser.add_argument(
+        "--pexels-min-height",
+        type=int,
+        default=1080,
+        help="Minimum height for Pexels images (default: 1080)"
+    )
+    
+    # LLM keyword extraction options
+    parser.add_argument(
+        "--llm-keywords",
+        action="store_true",
+        default=True,
+        help="Use LLM for keyword extraction (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-llm-keywords",
+        action="store_false",
+        dest="llm_keywords",
+        help="Disable LLM keyword extraction (use simple extraction)"
+    )
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default="microsoft/phi-2",
+        help="LLM model for keyword extraction (default: microsoft/phi-2)"
+    )
+    parser.add_argument(
+        "--llm-quantization",
+        action="store_true",
+        default=True,
+        help="Use 4-bit quantization for LLM (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-llm-quantization",
+        action="store_false",
+        dest="llm_quantization",
+        help="Disable LLM quantization (uses more memory)"
+    )
+    
     # Model options
     parser.add_argument(
         "--whisper-model",
@@ -129,6 +204,32 @@ For more information, see: https://github.com/your-repo/story-reader
         type=str,
         default="photojournalistic",
         help="Style prefix for image prompts (default: photojournalistic)"
+    )
+    
+    # Upscaling options
+    parser.add_argument(
+        "--upscale",
+        action="store_true",
+        help="Enable image upscaling for higher resolution"
+    )
+    parser.add_argument(
+        "--upscale-factor",
+        type=float,
+        default=2.0,
+        help="Upscale multiplier (default: 2.0 = 2x resolution)"
+    )
+    parser.add_argument(
+        "--upscale-method",
+        type=str,
+        default="pil_lanczos",
+        choices=["pil_lanczos", "pil_bicubic", "opencv_cubic", "real_esrgan"],
+        help="Upscaling method (default: pil_lanczos)"
+    )
+    parser.add_argument(
+        "--sharpen",
+        type=float,
+        default=1.2,
+        help="Sharpness enhancement after upscaling (1.0 = no change, default: 1.2)"
     )
     
     # Cache options
@@ -173,8 +274,21 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         device=args.device,
         image_size=image_size,
         prompt_style=args.prompt_style,
+        upscale_images=args.upscale,
+        upscale_factor=args.upscale_factor,
+        upscale_method=args.upscale_method,
+        upscale_sharpness=args.sharpen,
         clear_cache=args.clear_cache,
         use_cache=not args.no_cache,
+        use_pexels=args.use_pexels,
+        pexels_api_key=args.pexels_api_key,
+        pexels_fallback=args.pexels_fallback,
+        pexels_max_results=args.pexels_max_results,
+        pexels_min_width=args.pexels_min_width,
+        pexels_min_height=args.pexels_min_height,
+        llm_keyword_extractor=args.llm_keywords,
+        llm_model_name=args.llm_model,
+        llm_quantization=args.llm_quantization,
     )
 
 

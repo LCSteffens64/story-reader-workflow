@@ -1,17 +1,20 @@
 {
   "transcription": {
     "status": "completed",
-    "start_time": "2026-02-04T14:18:28.331554",
-    "end_time": "2026-02-04T14:18:28.359695"
+    "start_time": "2026-02-04T18:03:43.323504",
+    "end_time": "2026-02-04T18:03:43.348470",
+    "error_message": null
   },
   "paragraph_segmentation": {
     "status": "completed",
-    "start_time": "2026-02-04T14:18:28.360278",
-    "end_time": "2026-02-04T14:18:28.360675"
+    "start_time": "2026-02-04T18:03:43.349058",
+    "end_time": "2026-02-04T18:03:43.349572",
+    "error_message": null
   },
-  "image_generation": {
+  "hybrid_image_generation": {
     "status": "running",
-    "start_time": "2026-02-04T14:18:28.361209",
-    "end_time": null
+    "start_time": "2026-02-04T18:03:43.350318",
+    "end_time": null,
+    "error_message": null
   }
 }

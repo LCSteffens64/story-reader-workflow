@@ -48,11 +48,31 @@ class PipelineConfig:
     use_cache: bool = True
     clear_cache: bool = False
     
+    # Upscaling options
+    upscale_images: bool = False
+    upscale_factor: float = 2.0
+    upscale_method: str = "pil_lanczos"  # pil_lanczos, pil_bicubic, opencv_cubic, real_esrgan
+    upscale_sharpness: float = 1.2
+    upscale_contrast: float = 1.0
+    
     # Output options
     skip_audio_mux: bool = False
     music_volume: float = 0.3
     narration_volume: float = 1.0
     audio_bitrate: str = "192k"
+    
+    # Pexels integration settings
+    use_pexels: bool = False
+    pexels_api_key: Optional[str] = None
+    pexels_fallback: bool = True  # Use SD if Pexels fails
+    pexels_max_results: int = 5
+    pexels_min_width: int = 1920
+    pexels_min_height: int = 1080
+    
+    # LLM keyword extraction settings
+    llm_keyword_extractor: bool = True
+    llm_model_name: str = "microsoft/phi-2"
+    llm_quantization: bool = True
     
     def __post_init__(self):
         """Convert string paths to Path objects and resolve them."""
@@ -114,6 +134,15 @@ class PipelineConfig:
             "use_cache": self.use_cache,
             "skip_audio_mux": self.skip_audio_mux,
             "music_volume": self.music_volume,
+            "use_pexels": self.use_pexels,
+            "pexels_api_key": self.pexels_api_key,
+            "pexels_fallback": self.pexels_fallback,
+            "pexels_max_results": self.pexels_max_results,
+            "pexels_min_width": self.pexels_min_width,
+            "pexels_min_height": self.pexels_min_height,
+            "llm_keyword_extractor": self.llm_keyword_extractor,
+            "llm_model_name": self.llm_model_name,
+            "llm_quantization": self.llm_quantization,
         }
     
     @classmethod

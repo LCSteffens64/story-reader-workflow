@@ -40,13 +40,31 @@ This tool takes spoken narration and automatically:
 │  Segmentation   │  and sentence count
 └────────┬────────┘
          │
-         ▼
-┌─────────────────┐
-│ Stable Diffusion│  Generates photojournalistic images from
-│ Image Generation│  paragraph text (with negative prompts)
-└────────┬────────┘
-         │
-         ▼
+         ├─────────────────────────────────────────────────────────┐
+         │                                                         │
+         ▼                                                         ▼
+┌─────────────────┐                                    ┌─────────────────┐
+│ [NEW] NLP       │                                    │ Stable Diffusion│
+│ Keyword Extract │  Extracts 2-3 keywords from text   │ Image Generation│
+│  (Rule-based)   │  AND Stable Diffusion prompt      │                 │
+└────────┬────────┘                                    └────────┬────────┘
+         │                                                         │
+         ▼                                                         │
+┌─────────────────┐                                    ┌──────────┴──────────┐
+│   Pexels API    │                                    │  Fallback to SD if   │
+│  Search Query   │  Optimized search using keywords   │  Pexels fails        │
+│   (2-3 words)   │                                    │                      │
+└────────┬────────┘                                    └──────────────────────┘
+         │                                                         │
+         ▼                                                         │
+┌─────────────────┐                                    ┌──────────┴──────────┐
+│  Pexels Fetch   │                                    │  Stable Diffusion     │
+│  (Real Photos)  │  Downloads high-quality images     │  (AI Generation)     │
+└────────┬────────┘                                    └──────────────────────┘
+         │                                                         │
+         └────────────────────────────────┬────────────────────────┘
+                                          │
+                                          ▼
 ┌─────────────────┐
 │   Ken Burns     │  Applies slow zoom/pan animation to each
 │  Video Effect   │  image, matching paragraph duration
@@ -272,6 +290,50 @@ python main.py -i narration.wav --clear-cache -o output/
 ```bash
 python main.py -i narration.wav --no-audio -o output/
 ```
+
+### Pexels Integration (NEW!)
+
+Use real stock photos from Pexels instead of AI-generated images:
+
+```bash
+# Use Pexels with Stable Diffusion fallback (recommended)
+python -m story_reader -i narration.wav --use-pexels --pexels-api-key YOUR_KEY -o output/
+
+# Pure Pexels mode (no AI generation)
+python -m story_reader -i narration.wav --use-pexels --no-pexels-fallback -o output/
+
+# Pexels with custom settings
+python -m story_reader -i narration.wav --use-pexels --pexels-max-results 3 --pexels-min-width 1920 -o output/
+```
+
+**Pexels API Key Setup:**
+1. Get a free API key from [Pexels API](https://www.pexels.com/api/)
+2. Set as environment variable: `export PEXELS_API_KEY="your_key_here"`
+3. Or pass via command line: `--pexels-api-key "your_key_here"`
+
+**How It Works:**
+- **Smart Keyword Extraction**: Uses NLP to extract 2-3 key concepts from both your text AND the Stable Diffusion prompt
+- **Optimized Search**: Converts keywords into targeted Pexels search queries
+- **Automatic Fallback**: If Pexels fails, automatically falls back to Stable Diffusion
+- **Mixed Results**: Can combine real photos and AI images in the same video
+
+**Example:**
+```
+Input: "The old lighthouse stood proudly against the stormy sea"
+NLP Extracts: ["lighthouse", "stormy", "sea", "beam"]
+Pexels Search: "lighthouse stormy sea"
+Result: Real lighthouse photo OR AI-generated image if Pexels fails
+```
+
+**Pexels Configuration Options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--use-pexels` | `false` | Enable Pexels integration |
+| `--pexels-api-key` | - | Your Pexels API key |
+| `--pexels-fallback` | `true` | Use SD if Pexels fails |
+| `--pexels-max-results` | `5` | Max search results to consider |
+| `--pexels-min-width` | `1920` | Minimum image width |
+| `--pexels-min-height` | `1080` | Minimum image height |
 
 ---
 
