@@ -4,6 +4,7 @@ Audio transcription step using OpenAI Whisper.
 
 from pathlib import Path
 from typing import List, Dict, Any
+import re
 
 import whisper
 
@@ -25,6 +26,22 @@ class TranscriberStep(PipelineStep[Path, List[Dict[str, Any]]]):
     
     # Class-level model cache to avoid reloading
     _model_cache: Dict[str, Any] = {}
+    _curse_words = {
+        "fuck", "fucking", "fucked", "fucker", "motherfucker",
+        "shit", "shitty", "bullshit",
+        "bitch", "bitches",
+        "asshole",
+        "bastard",
+        "cunt",
+        "dick", "dicks",
+        "piss",
+        "prick",
+        "slut",
+        "whore",
+        "damn",
+        "goddamn",
+        "hell",
+    }
     
     def __init__(self, config: PipelineConfig, cache: CacheManager):
         super().__init__(config, cache)
@@ -54,11 +71,26 @@ class TranscriberStep(PipelineStep[Path, List[Dict[str, Any]]]):
         print(f"Transcribing audio: {audio_path.name}")
         result = model.transcribe(str(audio_path))
         segments = result["segments"]
+        segments = self._censor_segments(segments)
         
         # Save to cache
         self.cache.save_transcription(audio_path, segments)
         
         print(f"Transcribed {len(segments)} segments")
+        return segments
+
+    def _censor_segments(self, segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Censor curse words in transcription segments."""
+        if not segments:
+            return segments
+        pattern = re.compile(
+            r"\\b(" + "|".join(re.escape(w) for w in sorted(self._curse_words, key=len, reverse=True)) + r")\\b",
+            re.IGNORECASE,
+        )
+        for seg in segments:
+            text = seg.get("text", "")
+            if text:
+                seg["text"] = pattern.sub(lambda m: "*" * len(m.group(0)), text)
         return segments
     
     def _get_model(self):

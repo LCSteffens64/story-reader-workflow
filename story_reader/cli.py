@@ -85,6 +85,11 @@ For more information, see: https://github.com/your-repo/story-reader
         help="Optional background music file"
     )
     parser.add_argument(
+        "--no-music",
+        action="store_true",
+        help="Do not use background music even if present in the music folder"
+    )
+    parser.add_argument(
         "--music-volume",
         type=float,
         default=0.3,
@@ -254,6 +259,11 @@ For more information, see: https://github.com/your-repo/story-reader
         action="store_true",
         help="Disable caching (regenerate everything)"
     )
+    parser.add_argument(
+        "--use-paragraphs-file",
+        action="store_true",
+        help="Use output/<title>/paragraphs.json if present instead of regenerating paragraphs"
+    )
     
     # Misc options
     parser.add_argument(
@@ -280,6 +290,7 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         background_music=args.music,
         music_volume=args.music_volume,
         skip_audio_mux=args.no_audio,
+        disable_music=args.no_music,
         whisper_model=args.whisper_model,
         sd_model=args.sd_model,
         device=args.device,
@@ -294,6 +305,7 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         llm_keyword_extractor=args.llm_keywords,
         llm_model_name=args.llm_model,
         llm_quantization=args.llm_quantization,
+        use_paragraphs_file=args.use_paragraphs_file,
         use_pexels=args.use_pexels,
         use_legnext=args.use_legnext,
         pexels_fallback_to_sd=args.sd_fallback,
@@ -315,6 +327,12 @@ def main() -> int:
     if not title:
         title = "untitled"
 
+    legnext_tone_keywords = None
+    if args.use_legnext:
+        legnext_tone_keywords = input(
+            "Image tone keywords (comma-separated, optional): "
+        ).strip() or None
+
     # If user didn't override output dir, place outputs under a title folder
     if args.output == Path("output"):
         safe_title = re.sub(r"[^A-Za-z0-9_-]+", "-", title).strip("-").lower()
@@ -326,18 +344,32 @@ def main() -> int:
     if not check_dependencies():
         return 1
     
-    # Validate input file unless narration takes exist
-    narration_dir = Path("narration")
-    narration_takes = list(narration_dir.glob("*.wav")) if narration_dir.exists() else []
-    if not narration_takes:
-        if not validate_audio_file(args.input):
-            return 1
-    else:
-        print(f"Found {len(narration_takes)} narration take(s) in {narration_dir}/; will concatenate.")
-    
     # Create config from args
+    # Initialize per-title folders for narration and music
+    narration_dir = (args.output / "narration").resolve()
+    music_dir = (args.output / "music").resolve()
+    narration_dir.mkdir(parents=True, exist_ok=True)
+    music_dir.mkdir(parents=True, exist_ok=True)
+
+    narration_files = list(narration_dir.glob("*.wav"))
+    if not narration_files:
+        print(f"No narration files found in {narration_dir}")
+        print("Please add one or more .wav files to this folder, then re-run.")
+        return 0
+
+    if not args.no_music and args.music is None:
+        music_files = list(music_dir.rglob("*.mp3"))
+        if not music_files:
+            print(f"No music files found in {music_dir}")
+            print("Add .mp3 files to this folder or re-run with --no-music.")
+            return 0
+
     config = args_to_config(args)
     config.video_title = title
+    config.narration_dir = narration_dir
+    config.music_dir = music_dir
+    config.disable_music = args.no_music
+    config.legnext_tone_keywords = legnext_tone_keywords
     
     # Import pipeline here to avoid slow imports on --help
     from .pipeline import StoryReaderPipeline

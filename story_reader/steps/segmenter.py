@@ -5,6 +5,7 @@ Paragraph segmentation step - groups transcript segments into paragraphs.
 import json
 from pathlib import Path
 from typing import List, Dict, Any
+import re
 
 from .base import PipelineStep
 from ..config import PipelineConfig
@@ -26,6 +27,22 @@ class SegmenterStep(PipelineStep[List[Dict[str, Any]], List[Dict[str, Any]]]):
     
     name = "paragraph_segmentation"
     description = "Group transcript segments into paragraphs"
+    _curse_words = {
+        "fuck", "fucking", "fucked", "fucker", "motherfucker",
+        "shit", "shitty", "bullshit",
+        "bitch", "bitches",
+        "asshole",
+        "bastard",
+        "cunt",
+        "dick", "dicks",
+        "piss",
+        "prick",
+        "slut",
+        "whore",
+        "damn",
+        "goddamn",
+        "hell",
+    }
     
     def __init__(self, config: PipelineConfig, cache: CacheManager):
         super().__init__(config, cache)
@@ -44,6 +61,12 @@ class SegmenterStep(PipelineStep[List[Dict[str, Any]], List[Dict[str, Any]]]):
             - end: End time in seconds
             - duration: Paragraph duration in seconds
         """
+        if self.config.use_paragraphs_file and self.config.paragraphs_file.exists():
+            with open(self.config.paragraphs_file, "r") as f:
+                paragraphs = json.load(f)
+            print(f"Loaded {len(paragraphs)} paragraphs from {self.config.paragraphs_file}")
+            return paragraphs
+
         paragraphs = []
         current_segments = []
         paragraph_start = None
@@ -51,7 +74,8 @@ class SegmenterStep(PipelineStep[List[Dict[str, Any]], List[Dict[str, Any]]]):
         for seg in segments:
             seg_start = seg["start"]
             seg_end = seg["end"]
-            seg_text = seg["text"].strip()
+            seg_text = self._censor_text(seg["text"]).strip()
+            seg["text"] = seg_text
             
             if paragraph_start is None:
                 paragraph_start = seg_start
@@ -101,6 +125,16 @@ class SegmenterStep(PipelineStep[List[Dict[str, Any]], List[Dict[str, Any]]]):
         
         print(f"Created {len(paragraphs)} paragraphs from {len(segments)} segments")
         return paragraphs
+
+    def _censor_text(self, text: str) -> str:
+        """Censor curse words in text."""
+        if not text:
+            return text
+        pattern = re.compile(
+            r"\\b(" + "|".join(re.escape(w) for w in sorted(self._curse_words, key=len, reverse=True)) + r")\\b",
+            re.IGNORECASE,
+        )
+        return pattern.sub(lambda m: "*" * len(m.group(0)), text)
     
     def _save_paragraphs(self, paragraphs: List[Dict[str, Any]]) -> None:
         """Save paragraphs to JSON file for inspection."""

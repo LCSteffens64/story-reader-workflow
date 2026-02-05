@@ -131,6 +131,8 @@ class StoryReaderPipeline:
         """
         # Prepare input audio (concatenate narration takes if present)
         self._prepare_input_audio()
+        self._prepare_music_audio()
+        self._validate_music_length()
 
         # Validate input
         if not self.config.input_audio.exists():
@@ -187,7 +189,7 @@ class StoryReaderPipeline:
         concat_list = self.config.output_dir / "narration_concat.txt"
         with open(concat_list, "w") as f:
             for take in takes:
-                f.write(f"file '{take}'\n")
+                f.write(f"file '{take.resolve()}'\n")
 
         combined = self.config.output_dir / "narration_combined.wav"
         cmd = [
@@ -205,6 +207,91 @@ class StoryReaderPipeline:
             raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
 
         self.config.input_audio = combined
+
+    def _prepare_music_audio(self) -> None:
+        """
+        If multiple music tracks exist under the music directory,
+        concatenate them into a single file for muxing.
+        """
+        if self.config.disable_music:
+            return
+        if self.config.background_music and self.config.background_music.exists():
+            return
+
+        music_dir = self.config.music_dir
+        if not music_dir.exists() or not music_dir.is_dir():
+            return
+
+        tracks = sorted(music_dir.rglob("*.mp3"))
+        if not tracks:
+            return
+
+        if len(tracks) == 1:
+            self.config.background_music = tracks[0]
+            return
+
+        concat_list = self.config.output_dir / "music_concat.txt"
+        with open(concat_list, "w") as f:
+            for track in tracks:
+                f.write(f"file '{track.resolve()}'\n")
+
+        combined = self.config.output_dir / "music_combined.mp3"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list),
+            "-c", "copy",
+            str(combined)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg concat stderr: {result.stderr}")
+            raise RuntimeError(f"FFmpeg music concat failed: {result.stderr}")
+
+        self.config.background_music = combined
+
+    def _get_media_duration(self, media_path: Path) -> Optional[float]:
+        """Return duration in seconds for a media file via ffprobe."""
+        if not media_path or not media_path.exists():
+            return None
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(media_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"ffprobe stderr: {result.stderr}")
+            raise RuntimeError(f"ffprobe failed for {media_path}")
+        try:
+            return float(result.stdout.strip())
+        except ValueError as e:
+            raise RuntimeError(f"Invalid ffprobe duration for {media_path}: {result.stdout}") from e
+
+    def _validate_music_length(self) -> None:
+        """
+        Ensure background music covers the narration length when music is enabled.
+        """
+        if self.config.disable_music:
+            return
+
+        narration_len = self._get_media_duration(self.config.input_audio)
+        music_path = self.config.background_music
+        if not music_path or not music_path.exists():
+            return
+        music_len = self._get_media_duration(music_path)
+        if narration_len is None or music_len is None:
+            return
+        if music_len + 0.5 < narration_len:
+            raise RuntimeError(
+                f"Background music is too short ({music_len:.1f}s) for narration "
+                f"({narration_len:.1f}s). Add more tracks to {self.config.music_dir} "
+                "or rerun with --no-music."
+            )
     
     def run_step(self, step_name: str, input_data: Any) -> Any:
         """

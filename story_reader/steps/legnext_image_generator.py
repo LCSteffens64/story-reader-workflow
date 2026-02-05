@@ -84,7 +84,7 @@ class LegnextImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
                 "LEGNEXT_API_KEY is not set. Add it to the environment or use setup_env.py."
             )
 
-        prompt = self.config.get_image_prompt(para["text"])
+        prompt = self.config.get_legnext_prompt(para["text"])
         print(f"Generating image {idx+1}/{total} with Legnext...")
 
         job_id = self._submit_job(api_key, prompt)

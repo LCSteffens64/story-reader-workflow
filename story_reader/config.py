@@ -38,6 +38,8 @@ class PipelineConfig:
     prompt_style: str = "photojournalistic"
     prompt_template: str = "{style}, documentary style, candid moment, natural lighting, real scene depicting: {text}, 35mm film, high detail, authentic"
     negative_prompt: str = "text, words, letters, writing, watermark, signature, logo, blurry, low quality, cartoon, anime, illustration, drawing, painting, artificial, posed, staged"
+    legnext_prompt_template: str = "{text}"
+    legnext_tone_keywords: Optional[str] = None
     
     # Paragraph segmentation settings
     max_paragraph_duration: float = 15.0
@@ -67,6 +69,7 @@ class PipelineConfig:
     music_dir_volume: float = 0.3
     narration_volume: float = 1.0
     audio_bitrate: str = "192k"
+    disable_music: bool = False
 
     # Pexels options
     use_pexels: bool = False
@@ -88,6 +91,7 @@ class PipelineConfig:
     llm_quantization: bool = True
     llm_min_keywords: int = 3
     llm_max_keywords: int = 5
+    use_paragraphs_file: bool = False
     
     def __post_init__(self):
         """Convert string paths to Path objects and resolve them."""
@@ -151,6 +155,13 @@ class PipelineConfig:
             style=self.prompt_style,
             text=text
         )
+
+    def get_legnext_prompt(self, text: str) -> str:
+        """Generate a Legnext prompt from paragraph text, without style biasing."""
+        prompt = self.legnext_prompt_template.format(text=text)
+        if self.legnext_tone_keywords:
+            prompt = f"{prompt} | tone: {self.legnext_tone_keywords}"
+        return prompt
     
     def to_dict(self) -> dict:
         """Convert config to dictionary (for serialization)."""
@@ -167,6 +178,8 @@ class PipelineConfig:
             "device": self.device,
             "image_size": self.image_size,
             "prompt_style": self.prompt_style,
+            "legnext_prompt_template": self.legnext_prompt_template,
+            "legnext_tone_keywords": self.legnext_tone_keywords,
             "max_paragraph_duration": self.max_paragraph_duration,
             "min_silence": self.min_silence,
             "max_sentences": self.max_sentences,
@@ -175,9 +188,11 @@ class PipelineConfig:
             "use_cache": self.use_cache,
             "skip_audio_mux": self.skip_audio_mux,
             "music_volume": self.music_volume,
+            "disable_music": self.disable_music,
             "llm_keyword_extractor": self.llm_keyword_extractor,
             "llm_model_name": self.llm_model_name,
             "llm_quantization": self.llm_quantization,
+            "use_paragraphs_file": self.use_paragraphs_file,
             "use_pexels": self.use_pexels,
             "pexels_fallback_to_sd": self.pexels_fallback_to_sd,
             "pexels_per_page": self.pexels_per_page,

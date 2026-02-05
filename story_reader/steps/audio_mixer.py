@@ -42,6 +42,11 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         final_output = self.config.output_dir / "final_video.mp4"
         audio_path = self.config.input_audio
         music_path = self.config.background_music
+
+        if self.config.disable_music:
+            self._mux_narration_only(video_path, audio_path, final_output)
+            print(f"Final video created: {final_output}")
+            return final_output
         
         if music_path and music_path.exists():
             self._mux_with_music(video_path, audio_path, music_path, final_output, self.config.music_volume)
