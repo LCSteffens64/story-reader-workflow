@@ -40,31 +40,43 @@ This tool takes spoken narration and automatically:
 │  Segmentation   │  and sentence count
 └────────┬────────┘
          │
-         ├─────────────────────────────────────────────────────────┐
-         │                                                         │
-         ▼                                                         ▼
-┌─────────────────┐                                    ┌─────────────────┐
-│ [NEW] NLP       │                                    │ Stable Diffusion│
-│ Keyword Extract │  Extracts 2-3 keywords from text   │ Image Generation│
-│  (Rule-based)   │  AND Stable Diffusion prompt      │                 │
-└────────┬────────┘                                    └────────┬────────┘
-         │                                                         │
-         ▼                                                         │
-┌─────────────────┐                                    ┌──────────┴──────────┐
-│   Pexels API    │                                    │  Fallback to SD if   │
-│  Search Query   │  Optimized search using keywords   │  Pexels fails        │
-│   (2-3 words)   │                                    │                      │
-└────────┬────────┘                                    └──────────────────────┘
-         │                                                         │
-         ▼                                                         │
-┌─────────────────┐                                    ┌──────────┴──────────┐
-│  Pexels Fetch   │                                    │  Stable Diffusion     │
-│  (Real Photos)  │  Downloads high-quality images     │  (AI Generation)     │
-└────────┬────────┘                                    └──────────────────────┘
-         │                                                         │
-         └────────────────────────────────┬────────────────────────┘
-                                          │
-                                          ▼
+         ▼
+┌──────────────────────────────────────────────────────────────┐
+│                     Image Source Select                      │
+│   • Default: Stable Diffusion (local)                         │
+│   • Optional: Pexels (stock photos)                           │
+│   • Optional: Legnext (remote diffusion)                      │
+│   Note: --use-pexels and --use-legnext are mutually exclusive  │
+└────────┬─────────────────────────────────────────────────────┘
+         │
+         ├───────────────┬───────────────────────────────┬───────────────┐
+         │               │                               │               │
+         ▼               ▼                               ▼               │
+┌─────────────────┐  ┌─────────────────┐          ┌─────────────────┐    │
+│ Stable Diffusion│  │ LLM Keyword     │          │   Legnext API   │    │
+│ Image Generation│  │ Extraction      │          │  (Diffusion Job)│    │
+└────────┬────────┘  └────────┬────────┘          └────────┬────────┘    │
+         │                    │                              │           │
+         │                    ▼                              ▼           │
+         │           ┌─────────────────┐             ┌─────────────────┐  │
+         │           │   Pexels API    │             │  Job Polling    │  │
+         │           │  Search Query   │             │  + Image Fetch  │  │
+         │           └────────┬────────┘             └────────┬────────┘  │
+         │                    │                              │           │
+         │                    ▼                              ▼           │
+         │           ┌─────────────────┐                     │           │
+         │           │  Pexels Fetch   │                     │           │
+         │           └────────┬────────┘                     │           │
+         │                    │                              │           │
+         │                    ▼                              │           │
+         │           ┌─────────────────┐                     │           │
+         │           │  Optional SD    │                     │           │
+         │           │   Fallback      │                     │           │
+         │           └─────────────────┘                     │           │
+         │                                                   │           │
+         └───────────────────────────────┬───────────────────┴───────────┘
+                                         │
+                                         ▼
 ┌─────────────────┐
 │   Ken Burns     │  Applies slow zoom/pan animation to each
 │  Video Effect   │  image, matching paragraph duration
@@ -291,25 +303,25 @@ python main.py -i narration.wav --clear-cache -o output/
 python main.py -i narration.wav --no-audio -o output/
 ```
 
-### Pexels Integration (NEW!)
+### Pexels Integration
 
 Use real stock photos from Pexels instead of AI-generated images:
 
 ```bash
 # Use Pexels with Stable Diffusion fallback (recommended)
-python -m story_reader -i narration.wav --use-pexels --pexels-api-key YOUR_KEY -o output/
+python -m story_reader -i narration.wav --use-pexels -o output/
 
 # Pure Pexels mode (no AI generation)
-python -m story_reader -i narration.wav --use-pexels --no-pexels-fallback -o output/
+python -m story_reader -i narration.wav --use-pexels -o output/
 
 # Pexels with custom settings
-python -m story_reader -i narration.wav --use-pexels --pexels-max-results 3 --pexels-min-width 1920 -o output/
+python -m story_reader -i narration.wav --use-pexels --pexels-per-page 10 --pexels-min-width 1920 -o output/
 ```
 
 **Pexels API Key Setup:**
 1. Get a free API key from [Pexels API](https://www.pexels.com/api/)
 2. Set as environment variable: `export PEXELS_API_KEY="your_key_here"`
-3. Or pass via command line: `--pexels-api-key "your_key_here"`
+3. Or create `pexels.txt` and run `python setup_env.py`
 
 **How It Works:**
 - **Smart Keyword Extraction**: Uses NLP to extract 2-3 key concepts from both your text AND the Stable Diffusion prompt
@@ -329,11 +341,36 @@ Result: Real lighthouse photo OR AI-generated image if Pexels fails
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--use-pexels` | `false` | Enable Pexels integration |
-| `--pexels-api-key` | - | Your Pexels API key |
-| `--pexels-fallback` | `true` | Use SD if Pexels fails |
-| `--pexels-max-results` | `5` | Max search results to consider |
-| `--pexels-min-width` | `1920` | Minimum image width |
-| `--pexels-min-height` | `1080` | Minimum image height |
+| `--sd-fallback` | `false` | Use SD if Pexels fails |
+| `--pexels-per-page` | `15` | Search results per query |
+| `--pexels-min-width` | `1280` | Minimum image width |
+| `--pexels-min-height` | `720` | Minimum image height |
+
+### Legnext Integration
+
+Generate images from Legnext instead of local Stable Diffusion:
+
+```bash
+# Use Legnext images
+python -m story_reader -i narration.wav --use-legnext -o output/
+
+# Tune Legnext polling behavior
+python -m story_reader -i narration.wav --use-legnext --legnext-poll-interval 1.5 --legnext-timeout 240 -o output/
+```
+
+**Legnext API Key Setup:**
+1. Get an API key from Legnext
+2. Set as environment variable: `export LEGNEXT_API_KEY="your_key_here"`
+3. Or create `legnext.txt` and run `python setup_env.py`
+
+**Legnext Configuration Options:**
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--use-legnext` | `false` | Enable Legnext integration |
+| `--legnext-poll-interval` | `2.0` | Polling interval in seconds |
+| `--legnext-timeout` | `180.0` | Job timeout in seconds |
+
+**Note:** `--use-pexels` and `--use-legnext` are mutually exclusive.
 
 ---
 

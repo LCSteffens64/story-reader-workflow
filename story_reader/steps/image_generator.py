@@ -44,39 +44,39 @@ class ImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
         image_paths = []
         
         for idx, para in enumerate(paragraphs):
-            # Check cache first
-            cached_path = self.cache.get_cached_image(
-                para['text'], idx, self.config.output_dir
-            )
-            if cached_path is not None:
-                image_paths.append(cached_path)
-                continue
-            
-            # Load pipeline only when needed (lazy loading)
-            if self._pipe is None:
-                self._pipe = self._get_pipeline()
-            
-            # Generate image
-            prompt = self.config.get_image_prompt(para['text'])
-            print(f"Generating image {idx+1}/{len(paragraphs)}...")
-            
-            image = self._pipe(
-                prompt,
-                negative_prompt=self.config.negative_prompt,
-                height=self.config.image_size[1],
-                width=self.config.image_size[0],
-            ).images[0]
-            
-            # Save image
-            img_path = self.config.output_dir / f"{idx:03d}.png"
-            image.save(img_path)
+            img_path = self.generate_for_paragraph(para, idx, total=len(paragraphs))
             image_paths.append(img_path)
-            
-            # Cache the result
-            self.cache.save_image_cache(para['text'], idx, img_path)
         
         print(f"Generated {len(image_paths)} images")
         return image_paths
+
+    def generate_for_paragraph(self, para: Dict[str, Any], idx: int, total: int = 1) -> Path:
+        """Generate a single image for one paragraph (used for fallbacks)."""
+        cached_path = self.cache.get_cached_image(
+            para["text"], idx, self.config.images_dir
+        )
+        if cached_path is not None:
+            return cached_path
+
+        # Load pipeline only when needed (lazy loading)
+        if self._pipe is None:
+            self._pipe = self._get_pipeline()
+
+        prompt = self.config.get_image_prompt(para["text"])
+        print(f"Generating image {idx+1}/{total} with Stable Diffusion...")
+
+        image = self._pipe(
+            prompt,
+            negative_prompt=self.config.negative_prompt,
+            height=self.config.image_size[1],
+            width=self.config.image_size[0],
+        ).images[0]
+
+        img_path = self.config.images_dir / f"{idx:03d}.png"
+        image.save(img_path)
+
+        self.cache.save_image_cache(para["text"], idx, img_path)
+        return img_path
     
     def _get_pipeline(self) -> StableDiffusionPipeline:
         """Get or load the Stable Diffusion pipeline with caching."""

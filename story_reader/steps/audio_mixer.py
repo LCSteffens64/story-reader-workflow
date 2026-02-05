@@ -44,9 +44,19 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         music_path = self.config.background_music
         
         if music_path and music_path.exists():
-            self._mux_with_music(video_path, audio_path, music_path, final_output)
+            self._mux_with_music(video_path, audio_path, music_path, final_output, self.config.music_volume)
         else:
-            self._mux_narration_only(video_path, audio_path, final_output)
+            music_path = self._select_music_from_dir()
+            if music_path:
+                self._mux_with_music(
+                    video_path,
+                    audio_path,
+                    music_path,
+                    final_output,
+                    self.config.music_dir_volume,
+                )
+            else:
+                self._mux_narration_only(video_path, audio_path, final_output)
         
         print(f"Final video created: {final_output}")
         return final_output
@@ -63,7 +73,6 @@ class AudioMixerStep(PipelineStep[Path, Path]):
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", self.config.audio_bitrate,
-            "-shortest",
             str(output_path)
         ]
         
@@ -77,13 +86,14 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         video_path: Path, 
         audio_path: Path, 
         music_path: Path, 
-        output_path: Path
+        output_path: Path,
+        music_volume: float
     ) -> None:
         """Mux narration and background music into the video."""
         print(f"Muxing video with narration and background music...")
         
         narration_vol = self.config.narration_volume
-        music_vol = self.config.music_volume
+        music_vol = music_volume
         
         # FFmpeg filter complex to mix audio tracks
         filter_complex = (
@@ -104,7 +114,6 @@ class AudioMixerStep(PipelineStep[Path, Path]):
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", self.config.audio_bitrate,
-            "-shortest",
             str(output_path)
         ]
         
@@ -112,3 +121,16 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         if result.returncode != 0:
             print(f"FFmpeg stderr: {result.stderr}")
             raise RuntimeError(f"FFmpeg audio mux with music failed: {result.stderr}")
+
+    def _select_music_from_dir(self) -> Optional[Path]:
+        """Pick a music track from the music directory (sorted)."""
+        music_dir = self.config.music_dir
+        if not music_dir.exists() or not music_dir.is_dir():
+            print(f"Music dir not found: {music_dir}")
+            return None
+        tracks = sorted(music_dir.rglob("*.mp3"))
+        if not tracks:
+            print(f"No .mp3 files found under: {music_dir}")
+            return None
+        print(f"Using background music from {tracks[0].name}")
+        return tracks[0]

@@ -3,6 +3,8 @@ Main pipeline orchestrator for the Story Reader workflow.
 """
 
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Optional, Dict, Any
 
 from .config import PipelineConfig
@@ -12,10 +14,10 @@ from .steps import (
     TranscriberStep,
     SegmenterStep,
     ImageGeneratorStep,
+    HybridImageGeneratorStep,
+    LegnextImageGeneratorStep,
     ImageUpscalerStep,
     UpscaleMethod,
-    PexelsImageFetcherStep,
-    HybridImageGeneratorStep,
     VideoComposerStep,
     AudioMixerStep,
 )
@@ -50,8 +52,8 @@ class StoryReaderPipeline:
         """
         self.config = config
         
-        # Setup output directory
-        self.config.output_dir.mkdir(parents=True, exist_ok=True)
+        # Setup output directories
+        self._init_output_dirs()
         
         # Initialize cache manager
         if config.clear_cache:
@@ -65,14 +67,39 @@ class StoryReaderPipeline:
         
         # Initialize steps
         self._init_steps()
+
+    def _init_output_dirs(self) -> None:
+        """Initialize output directories and clear old assets."""
+        self.config.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Clear old scenes on each run to avoid stale assets
+        if self.config.scenes_dir.exists():
+            shutil.rmtree(self.config.scenes_dir)
+        self.config.scenes_dir.mkdir(parents=True, exist_ok=True)
+
+        # Preserve images when cache is enabled to allow resuming
+        if self.config.images_dir.exists():
+            if not self.config.use_cache or self.config.clear_cache:
+                shutil.rmtree(self.config.images_dir)
+                self.config.images_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.config.images_dir.mkdir(parents=True, exist_ok=True)
     
     def _init_steps(self) -> None:
         """Initialize all pipeline steps."""
         self.transcriber = TranscriberStep(self.config, self.cache)
         self.segmenter = SegmenterStep(self.config, self.cache)
+
+        if self.config.use_legnext and self.config.use_pexels:
+            raise ValueError("Image sources are mutually exclusive: use only one of --use-legnext or --use-pexels.")
         
-        # Use hybrid image generator that supports both Pexels and Stable Diffusion
-        self.image_generator = HybridImageGeneratorStep(self.config, self.cache)
+        # Choose image source (Legnext, Pexels, or Stable Diffusion)
+        if self.config.use_legnext:
+            self.image_generator = LegnextImageGeneratorStep(self.config, self.cache)
+        elif self.config.use_pexels:
+            self.image_generator = HybridImageGeneratorStep(self.config, self.cache)
+        else:
+            self.image_generator = ImageGeneratorStep(self.config, self.cache)
         
         # Initialize upscaler if enabled
         if self.config.upscale_images:
@@ -102,6 +129,9 @@ class StoryReaderPipeline:
             FileNotFoundError: If input audio doesn't exist
             RuntimeError: If any pipeline step fails
         """
+        # Prepare input audio (concatenate narration takes if present)
+        self._prepare_input_audio()
+
         # Validate input
         if not self.config.input_audio.exists():
             raise FileNotFoundError(f"Input audio not found: {self.config.input_audio}")
@@ -137,6 +167,44 @@ class StoryReaderPipeline:
         print(f"Pipeline complete! Output: {final_video}")
         
         return final_video
+
+    def _prepare_input_audio(self) -> None:
+        """
+        If narration takes exist (narration/1.wav, 2.wav, ...),
+        concatenate them into a single file for transcription and muxing.
+        """
+        narration_dir = self.config.narration_dir
+        if not narration_dir.exists() or not narration_dir.is_dir():
+            return
+
+        takes = sorted(
+            narration_dir.glob("*.wav"),
+            key=lambda p: int(p.stem) if p.stem.isdigit() else p.stem
+        )
+        if not takes:
+            return
+
+        concat_list = self.config.output_dir / "narration_concat.txt"
+        with open(concat_list, "w") as f:
+            for take in takes:
+                f.write(f"file '{take}'\n")
+
+        combined = self.config.output_dir / "narration_combined.wav"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list),
+            "-c", "copy",
+            str(combined)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg concat stderr: {result.stderr}")
+            raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+
+        self.config.input_audio = combined
     
     def run_step(self, step_name: str, input_data: Any) -> Any:
         """

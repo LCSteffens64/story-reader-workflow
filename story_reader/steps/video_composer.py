@@ -2,6 +2,7 @@
 Video composition step using FFmpeg with Ken Burns effect.
 """
 
+import random
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
@@ -41,8 +42,12 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         video_clips = []
         
         # Create individual clips with Ken Burns effect
+        last_idx = len(image_paths) - 1
         for idx, (img_path, para) in enumerate(zip(image_paths, paragraphs)):
-            clip_path = self._create_ken_burns_clip(img_path, para['duration'], idx)
+            duration = para["duration"]
+            if idx == last_idx and self.config.video_padding_sec > 0:
+                duration += self.config.video_padding_sec
+            clip_path = self._create_ken_burns_clip(img_path, duration, idx)
             video_clips.append(clip_path)
         
         # Concatenate all clips
@@ -63,14 +68,28 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         Returns:
             Path to the created clip
         """
-        clip_path = self.config.output_dir / f"scene_{idx:03d}.mp4"
+        clip_path = self.config.scenes_dir / f"scene_{idx:03d}.mp4"
         
         # Build zoompan filter
-        zoom_speed = self.config.ken_burns_zoom_speed
         max_zoom = self.config.ken_burns_max_zoom
-        num_frames = int(duration * self.config.fps)
-        
-        zoompan_filter = f"zoompan=z='min(zoom+{zoom_speed},{max_zoom})':d={num_frames}"
+        num_frames = max(int(duration * self.config.fps), 1)
+
+        # Compute speed so we reach max_zoom at the end of the clip
+        zoom_speed = (max_zoom - 1.0) / max(num_frames - 1, 1)
+
+        # Randomize the fixed point for the zoom to avoid awkward crops
+        rng = random.Random(idx)
+        x_focus = rng.uniform(0.3, 0.7)
+        y_focus = rng.uniform(0.3, 0.7)
+
+        zoompan_filter = (
+            "zoompan="
+            f"z='min(zoom+{zoom_speed},{max_zoom})':"
+            f"x='iw*{x_focus}-(iw/zoom)/2':"
+            f"y='ih*{y_focus}-(ih/zoom)/2':"
+            f"d={num_frames},"
+            "vignette=PI/5"
+        )
         
         cmd = [
             "ffmpeg",
@@ -102,7 +121,7 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
             Path to the concatenated video
         """
         # Create concat file list
-        concat_file = self.config.output_dir / "scenes.txt"
+        concat_file = self.config.scenes_dir / "scenes.txt"
         with open(concat_file, "w") as f:
             for clip in video_clips:
                 f.write(f"file '{clip}'\n")
@@ -128,9 +147,9 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
     
     def cleanup_temp_clips(self) -> None:
         """Remove temporary scene clips to save disk space."""
-        for clip in self.config.output_dir.glob("scene_*.mp4"):
+        for clip in self.config.scenes_dir.glob("scene_*.mp4"):
             clip.unlink()
         
-        concat_file = self.config.output_dir / "scenes.txt"
+        concat_file = self.config.scenes_dir / "scenes.txt"
         if concat_file.exists():
             concat_file.unlink()

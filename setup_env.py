@@ -19,6 +19,7 @@ def load_api_keys():
 
     hf_file = project_root / "HF_TOKEN.txt"
     pexels_file = project_root / "pexels.txt"
+    legnext_file = project_root / "legnext.txt"
 
     loaded_keys = {}
 
@@ -42,6 +43,7 @@ def load_api_keys():
 
     hf_ok = read_key(hf_file, "HF_TOKEN")
     pexels_ok = read_key(pexels_file, "PEXELS_API_KEY")
+    legnext_ok = read_key(legnext_file, "LEGNEXT_API_KEY")
 
     # Write export file so subprocesses can source it
     if loaded_keys:
@@ -63,14 +65,22 @@ def load_api_keys():
     print("API KEY STATUS:")
     print(f"HF_TOKEN: {'✓ Set' if hf_ok else '✗ Not set'}")
     print(f"PEXELS_API_KEY: {'✓ Set' if pexels_ok else '✗ Not set'}")
+    print(f"LEGNEXT_API_KEY: {'✓ Set' if legnext_ok else '✗ Not set'}")
     print("=" * 50)
 
-    if not (hf_ok and pexels_ok):
+    if not hf_ok:
         print("\nTo set up API keys:")
         print("1. Create HF_TOKEN.txt with your Hugging Face token")
-        print("2. Create pexels.txt with your Pexels API key")
-        print("3. Run this script again or eval the export file")
+        print("2. Run this script again or eval the export file")
         return False
+
+    if not pexels_ok:
+        print("\nNote: PEXELS_API_KEY is required only when using --use-pexels.")
+        print("Create pexels.txt with your Pexels API key if needed.")
+
+    if not legnext_ok:
+        print("\nNote: LEGNEXT_API_KEY is required only when using --use-legnext.")
+        print("Create legnext.txt with your Legnext API key if needed.")
 
     return True
 
@@ -100,9 +110,20 @@ your_pexels_api_key_here
 """)
         print(f"Created sample file: {pexels_sample}")
 
+    legnext_sample = project_root / "legnext.txt.sample"
+    if not legnext_sample.exists():
+        legnext_sample.write_text("""# Legnext API Key
+# To get your API key:
+# 1. Go to https://legnext.ai/
+# 2. Sign up and create an API key
+your_legnext_api_key_here
+""")
+        print(f"Created sample file: {legnext_sample}")
+
     print("\nSample files created. Copy them to:")
     print("- HF_TOKEN.txt (remove .sample extension)")
     print("- pexels.txt (remove .sample extension)")
+    print("- legnext.txt (remove .sample extension)")
     print("Then replace placeholders with your actual API keys.")
 
 

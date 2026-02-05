@@ -128,11 +128,15 @@ class CacheManager:
         Returns:
             Path to the image if cached, None otherwise
         """
+        expected_path = output_dir / f"{idx:03d}.png"
+        if expected_path.exists():
+            print(f"Using existing image for paragraph {idx}")
+            return expected_path
+
         cache_key = self.get_image_cache_key(paragraph_text, idx)
         if cache_key in self.cache_index:
             cached_path = Path(self.cache_index[cache_key].get("path", ""))
             if cached_path.exists():
-                expected_path = output_dir / f"{idx:03d}.png"
                 if cached_path != expected_path:
                     shutil.copy(cached_path, expected_path)
                 print(f"Using cached image for paragraph {idx}")
@@ -158,54 +162,6 @@ class CacheManager:
         }
         self._save_cache_index()
     
-    # --- Pexels image caching ---
-    
-    def get_pexels_cache_key(self, paragraph_text: str, idx: int) -> str:
-        """Generate cache key for a Pexels image based on paragraph text hash."""
-        text_hash = compute_text_hash(paragraph_text)
-        return f"pexels_{idx:03d}_{text_hash}"
-    
-    def get_cached_pexels_image(self, paragraph_text: str, idx: int, output_dir: Path) -> Optional[Path]:
-        """
-        Retrieve cached Pexels image if available.
-        
-        Args:
-            paragraph_text: The paragraph text used to search for the image
-            idx: Index of the paragraph/image
-            output_dir: Directory where the image should be placed
-            
-        Returns:
-            Path to the image if cached, None otherwise
-        """
-        cache_key = self.get_pexels_cache_key(paragraph_text, idx)
-        if cache_key in self.cache_index:
-            cached_path = Path(self.cache_index[cache_key].get("path", ""))
-            if cached_path.exists():
-                expected_path = output_dir / f"pexels_processed_{idx:03d}.png"
-                if cached_path != expected_path:
-                    shutil.copy(cached_path, expected_path)
-                print(f"Using cached Pexels image for paragraph {idx}")
-                return expected_path
-        return None
-    
-    def save_pexels_cache(self, paragraph_text: str, idx: int, image_path: Path) -> None:
-        """
-        Save Pexels image path to cache index.
-        
-        Args:
-            paragraph_text: The paragraph text used to search for the image
-            idx: Index of the paragraph/image
-            image_path: Path where the image was saved
-        """
-        cache_key = self.get_pexels_cache_key(paragraph_text, idx)
-        self.cache_index[cache_key] = {
-            "type": "pexels_image",
-            "path": str(image_path),
-            "text_preview": paragraph_text[:100],
-            "text_hash": compute_text_hash(paragraph_text),
-            "created": datetime.now().isoformat(),
-        }
-        self._save_cache_index()
     
     # --- Cache management ---
     

@@ -6,6 +6,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+import re
 
 from .config import PipelineConfig
 
@@ -95,48 +96,6 @@ For more information, see: https://github.com/your-repo/story-reader
         help="Skip audio muxing (output visuals only)"
     )
     
-    # Pexels options
-    parser.add_argument(
-        "--use-pexels",
-        action="store_true",
-        help="Use Pexels API for image fetching instead of Stable Diffusion"
-    )
-    parser.add_argument(
-        "--pexels-api-key",
-        type=str,
-        default=None,
-        help="Pexels API key (can also be set via PEXELS_API_KEY environment variable)"
-    )
-    parser.add_argument(
-        "--pexels-fallback",
-        action="store_true",
-        default=True,
-        help="Use Stable Diffusion if Pexels fails (default: enabled)"
-    )
-    parser.add_argument(
-        "--no-pexels-fallback",
-        action="store_false",
-        dest="pexels_fallback",
-        help="Disable Stable Diffusion fallback when Pexels fails"
-    )
-    parser.add_argument(
-        "--pexels-max-results",
-        type=int,
-        default=5,
-        help="Maximum number of Pexels search results to consider (default: 5)"
-    )
-    parser.add_argument(
-        "--pexels-min-width",
-        type=int,
-        default=1920,
-        help="Minimum width for Pexels images (default: 1920)"
-    )
-    parser.add_argument(
-        "--pexels-min-height",
-        type=int,
-        default=1080,
-        help="Minimum height for Pexels images (default: 1080)"
-    )
     
     # LLM keyword extraction options
     parser.add_argument(
@@ -204,6 +163,58 @@ For more information, see: https://github.com/your-repo/story-reader
         type=str,
         default="photojournalistic",
         help="Style prefix for image prompts (default: photojournalistic)"
+    )
+
+    # Image source options (mutually exclusive)
+    image_source_group = parser.add_mutually_exclusive_group()
+    image_source_group.add_argument(
+        "--use-pexels",
+        action="store_true",
+        help="Fetch images from Pexels instead of generating locally"
+    )
+    image_source_group.add_argument(
+        "--use-legnext",
+        action="store_true",
+        help="Fetch images from Legnext instead of generating locally"
+    )
+
+    # Pexels options
+    parser.add_argument(
+        "--sd-fallback",
+        action="store_true",
+        help="If Pexels fails, fall back to Stable Diffusion generation"
+    )
+    parser.add_argument(
+        "--pexels-per-page",
+        type=int,
+        default=15,
+        help="Pexels search results per query (default: 15)"
+    )
+    parser.add_argument(
+        "--pexels-min-width",
+        type=int,
+        default=1280,
+        help="Minimum width for Pexels images (default: 1280)"
+    )
+    parser.add_argument(
+        "--pexels-min-height",
+        type=int,
+        default=720,
+        help="Minimum height for Pexels images (default: 720)"
+    )
+
+    # Legnext options
+    parser.add_argument(
+        "--legnext-poll-interval",
+        type=float,
+        default=2.0,
+        help="Legnext polling interval in seconds (default: 2.0)"
+    )
+    parser.add_argument(
+        "--legnext-timeout",
+        type=float,
+        default=180.0,
+        help="Legnext job timeout in seconds (default: 180.0)"
     )
     
     # Upscaling options
@@ -280,32 +291,53 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         upscale_sharpness=args.sharpen,
         clear_cache=args.clear_cache,
         use_cache=not args.no_cache,
-        use_pexels=args.use_pexels,
-        pexels_api_key=args.pexels_api_key,
-        pexels_fallback=args.pexels_fallback,
-        pexels_max_results=args.pexels_max_results,
-        pexels_min_width=args.pexels_min_width,
-        pexels_min_height=args.pexels_min_height,
         llm_keyword_extractor=args.llm_keywords,
         llm_model_name=args.llm_model,
         llm_quantization=args.llm_quantization,
+        use_pexels=args.use_pexels,
+        use_legnext=args.use_legnext,
+        pexels_fallback_to_sd=args.sd_fallback,
+        pexels_per_page=args.pexels_per_page,
+        pexels_min_width=args.pexels_min_width,
+        pexels_min_height=args.pexels_min_height,
+        legnext_poll_interval_sec=args.legnext_poll_interval,
+        legnext_timeout_sec=args.legnext_timeout,
+        narration_dir=Path("narration"),
     )
 
 
 def main() -> int:
     """Main entry point for CLI."""
     args = parse_args()
+
+    # Prompt for video title on invocation
+    title = input("Video title: ").strip()
+    if not title:
+        title = "untitled"
+
+    # If user didn't override output dir, place outputs under a title folder
+    if args.output == Path("output"):
+        safe_title = re.sub(r"[^A-Za-z0-9_-]+", "-", title).strip("-").lower()
+        if not safe_title:
+            safe_title = "untitled"
+        args.output = args.output / safe_title
     
     # Validate dependencies
     if not check_dependencies():
         return 1
     
-    # Validate input file
-    if not validate_audio_file(args.input):
-        return 1
+    # Validate input file unless narration takes exist
+    narration_dir = Path("narration")
+    narration_takes = list(narration_dir.glob("*.wav")) if narration_dir.exists() else []
+    if not narration_takes:
+        if not validate_audio_file(args.input):
+            return 1
+    else:
+        print(f"Found {len(narration_takes)} narration take(s) in {narration_dir}/; will concatenate.")
     
     # Create config from args
     config = args_to_config(args)
+    config.video_title = title
     
     # Import pipeline here to avoid slow imports on --help
     from .pipeline import StoryReaderPipeline
