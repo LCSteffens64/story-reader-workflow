@@ -85,6 +85,11 @@ class ImageUpscalerStep(PipelineStep[List[Path], List[Path]]):
             output_path = self._get_upscaled_path(img_path)
             
             print(f"Upscaling image {idx+1}/{len(image_paths)}...")
+
+            if output_path.exists():
+                print(f"Using existing upscaled image for {img_path.name}")
+                upscaled_paths.append(output_path)
+                continue
             
             if self.method == UpscaleMethod.REAL_ESRGAN:
                 self._upscale_esrgan(img_path, output_path)

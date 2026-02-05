@@ -132,6 +132,10 @@ class CacheManager:
         if expected_path.exists():
             print(f"Using existing image for paragraph {idx}")
             return expected_path
+        stitched_path = output_dir / f"{idx:03d}-stitched.png"
+        if stitched_path.exists():
+            print(f"Using existing stitched image for paragraph {idx}")
+            return stitched_path
 
         cache_key = self.get_image_cache_key(paragraph_text, idx)
         if cache_key in self.cache_index:
@@ -143,7 +147,27 @@ class CacheManager:
                 return expected_path
         return None
     
-    def save_image_cache(self, paragraph_text: str, idx: int, image_path: Path) -> None:
+    def get_image_cache_entry(self, paragraph_text: str, idx: int) -> Optional[dict]:
+        """
+        Retrieve the raw cache entry for an image if available.
+
+        Args:
+            paragraph_text: The paragraph text used to generate the image
+            idx: Index of the paragraph/image
+
+        Returns:
+            Cache entry dict if present, else None
+        """
+        cache_key = self.get_image_cache_key(paragraph_text, idx)
+        return self.cache_index.get(cache_key)
+
+    def save_image_cache(
+        self,
+        paragraph_text: str,
+        idx: int,
+        image_path: Path,
+        metadata: Optional[dict] = None,
+    ) -> None:
         """
         Save image path to cache index.
         
@@ -153,13 +177,16 @@ class CacheManager:
             image_path: Path where the image was saved
         """
         cache_key = self.get_image_cache_key(paragraph_text, idx)
-        self.cache_index[cache_key] = {
+        entry = {
             "type": "image",
             "path": str(image_path),
             "text_preview": paragraph_text[:100],
             "text_hash": compute_text_hash(paragraph_text),
             "created": datetime.now().isoformat(),
         }
+        if metadata:
+            entry.update(metadata)
+        self.cache_index[cache_key] = entry
         self._save_cache_index()
     
     

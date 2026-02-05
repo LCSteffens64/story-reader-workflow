@@ -4,8 +4,11 @@ Video composition step using FFmpeg with Ken Burns effect.
 
 import random
 import subprocess
+from io import BytesIO
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
+
+from PIL import Image
 
 from .base import PipelineStep
 from ..config import PipelineConfig
@@ -44,9 +47,12 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         # Create individual clips with Ken Burns effect
         last_idx = len(image_paths) - 1
         for idx, (img_path, para) in enumerate(zip(image_paths, paragraphs)):
+            img_path = self._ensure_tile_image(img_path, idx)
+            img_path = self._prefer_upscaled(img_path)
             duration = para["duration"]
             if idx == last_idx and self.config.video_padding_sec > 0:
                 duration += self.config.video_padding_sec
+            print(f"Creating Ken Burns scene {idx+1}/{len(image_paths)} from {img_path.name}...")
             clip_path = self._create_ken_burns_clip(img_path, duration, idx)
             video_clips.append(clip_path)
         
@@ -109,6 +115,87 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
             raise RuntimeError(f"FFmpeg failed for scene {idx}: {result.stderr}")
         
         return clip_path
+
+    def _ensure_tile_image(self, image_path: Path, idx: int) -> Path:
+        """
+        If image is a stitched 2x2 grid, crop a random tile and save as a normal frame.
+        """
+        name = image_path.name
+        if not (name.endswith("-stitched.png") or name.endswith("_stitched.png")):
+            return image_path
+
+        stitched_bytes = image_path.read_bytes()
+        try:
+            img = Image.open(BytesIO(stitched_bytes)).convert("RGB")
+        except Exception as e:
+            raise RuntimeError(f"Failed to open stitched image for scene {idx}: {e}") from e
+
+        width, height = img.size
+        if width < 2 or height < 2:
+            raise RuntimeError(f"Stitched image too small to crop: {img.size}")
+
+        tile_w = width // 2
+        tile_h = height // 2
+        tiles = [
+            (0, 0, tile_w, tile_h),
+            (tile_w, 0, tile_w * 2, tile_h),
+            (0, tile_h, tile_w, tile_h * 2),
+            (tile_w, tile_h, tile_w * 2, tile_h * 2),
+        ]
+        box = self._pick_nonempty_tile(img, tiles)
+        tile = img.crop(box)
+
+        out_path = self.config.images_dir / f"{idx:03d}.png"
+        tile.save(out_path, format="PNG")
+        return out_path
+
+    def _pick_nonempty_tile(self, img: Image.Image, tiles: List[tuple]) -> tuple:
+        """Prefer tiles that are not mostly empty/black."""
+        best_box = None
+        best_score = -1.0
+
+        for box in tiles:
+            tile = img.crop(box)
+            pixels = tile.getdata()
+            if not pixels:
+                continue
+            nonblack = 0
+            for r, g, b in pixels:
+                if r > 8 or g > 8 or b > 8:
+                    nonblack += 1
+            score = nonblack / len(pixels)
+            if score > best_score:
+                best_score = score
+                best_box = box
+
+        if best_box is None:
+            return random.choice(tiles)
+
+        if best_score < 0.05:
+            return random.choice(tiles)
+
+        top_tiles = []
+        for box in tiles:
+            tile = img.crop(box)
+            pixels = tile.getdata()
+            if not pixels:
+                continue
+            nonblack = 0
+            for r, g, b in pixels:
+                if r > 8 or g > 8 or b > 8:
+                    nonblack += 1
+            score = nonblack / len(pixels)
+            if score >= best_score * 0.9:
+                top_tiles.append(box)
+
+        return random.choice(top_tiles) if top_tiles else best_box
+
+    def _prefer_upscaled(self, image_path: Path) -> Path:
+        """Prefer an existing *_upscaled image if available."""
+        upscaled_path = image_path.parent / f"{image_path.stem}_upscaled{image_path.suffix}"
+        if upscaled_path.exists():
+            return upscaled_path
+        return image_path
     
     def _concatenate_clips(self, video_clips: List[Path]) -> Path:
         """
