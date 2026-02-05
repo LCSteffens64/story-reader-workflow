@@ -46,14 +46,17 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         
         # Create individual clips with Ken Burns effect
         last_idx = len(image_paths) - 1
+        target_size = None
         for idx, (img_path, para) in enumerate(zip(image_paths, paragraphs)):
             img_path = self._ensure_tile_image(img_path, idx)
             img_path = self._prefer_upscaled(img_path)
+            if target_size is None:
+                target_size = self._get_target_frame_size(img_path)
             duration = para["duration"]
             if idx == last_idx and self.config.video_padding_sec > 0:
                 duration += self.config.video_padding_sec
             print(f"Creating Ken Burns scene {idx+1}/{len(image_paths)} from {img_path.name}...")
-            clip_path = self._create_ken_burns_clip(img_path, duration, idx)
+            clip_path = self._create_ken_burns_clip(img_path, duration, idx, target_size)
             video_clips.append(clip_path)
         
         # Concatenate all clips
@@ -62,7 +65,13 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         print(f"Created video with {len(video_clips)} scenes: {final_video}")
         return final_video
     
-    def _create_ken_burns_clip(self, image_path: Path, duration: float, idx: int) -> Path:
+    def _create_ken_burns_clip(
+        self,
+        image_path: Path,
+        duration: float,
+        idx: int,
+        target_size: tuple,
+    ) -> Path:
         """
         Create a single Ken Burns clip from an image.
         
@@ -88,12 +97,18 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         x_focus = rng.uniform(0.3, 0.7)
         y_focus = rng.uniform(0.3, 0.7)
 
+        target_w, target_h = target_size
+        scale_pad = (
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color=black"
+        )
         zoompan_filter = (
+            f"{scale_pad},"
             "zoompan="
             f"z='min(zoom+{zoom_speed},{max_zoom})':"
             f"x='iw*{x_focus}-(iw/zoom)/2':"
             f"y='ih*{y_focus}-(ih/zoom)/2':"
-            f"d={num_frames},"
+            f"d={num_frames}:s={target_w}x{target_h},"
             "vignette=PI/5"
         )
         
@@ -115,6 +130,28 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
             raise RuntimeError(f"FFmpeg failed for scene {idx}: {result.stderr}")
         
         return clip_path
+
+    def _get_target_frame_size(self, image_path: Path) -> tuple:
+        """
+        Compute a consistent target frame size using a 16:9 canvas,
+        padding left/right (pillarbox) as needed.
+        """
+        img = Image.open(image_path)
+        width, height = img.size
+
+        target_h = height
+        target_w = int(round(target_h * 16 / 9))
+
+        if width > target_w:
+            target_w = width
+
+        # Ensure even dimensions for H.264 compatibility
+        if target_w % 2 != 0:
+            target_w += 1
+        if target_h % 2 != 0:
+            target_h += 1
+
+        return (target_w, target_h)
 
     def _ensure_tile_image(self, image_path: Path, idx: int) -> Path:
         """
