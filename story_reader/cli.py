@@ -264,6 +264,23 @@ For more information, see: https://github.com/your-repo/story-reader
         action="store_true",
         help="Use output/<title>/paragraphs.json if present instead of regenerating paragraphs"
     )
+    parser.add_argument(
+        "--normalize-narration",
+        action="store_true",
+        default=True,
+        help="Normalize narration clips before concatenation (default: enabled)"
+    )
+    parser.add_argument(
+        "--no-normalize-narration",
+        action="store_false",
+        dest="normalize_narration",
+        help="Disable narration normalization before concatenation"
+    )
+    parser.add_argument(
+        "--keep-scenes",
+        action="store_true",
+        help="Keep existing scenes and skip clearing output/<title>/scenes"
+    )
     
     # Misc options
     parser.add_argument(
@@ -315,6 +332,8 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         legnext_poll_interval_sec=args.legnext_poll_interval,
         legnext_timeout_sec=args.legnext_timeout,
         narration_dir=Path("narration"),
+        keep_scenes=args.keep_scenes,
+        normalize_narration=args.normalize_narration,
     )
 
 

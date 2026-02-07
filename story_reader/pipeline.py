@@ -74,8 +74,10 @@ class StoryReaderPipeline:
 
         # Clear old scenes on each run to avoid stale assets
         if self.config.scenes_dir.exists():
-            shutil.rmtree(self.config.scenes_dir)
-        self.config.scenes_dir.mkdir(parents=True, exist_ok=True)
+            if not self.config.keep_scenes:
+                shutil.rmtree(self.config.scenes_dir)
+        if not self.config.scenes_dir.exists():
+            self.config.scenes_dir.mkdir(parents=True, exist_ok=True)
 
         # Preserve images when cache is enabled to allow resuming
         if self.config.images_dir.exists():
@@ -186,9 +188,30 @@ class StoryReaderPipeline:
         if not takes:
             return
 
+        concat_sources = takes
+        if self.config.normalize_narration:
+            normalized_dir = self.config.output_dir / "narration_normalized"
+            normalized_dir.mkdir(parents=True, exist_ok=True)
+            concat_sources = []
+            for take in takes:
+                normalized = normalized_dir / take.name
+                cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i", str(take),
+                    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+                    "-c:a", "pcm_s16le",
+                    str(normalized),
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"FFmpeg loudnorm stderr: {result.stderr}")
+                    raise RuntimeError(f"FFmpeg loudnorm failed for {take.name}: {result.stderr}")
+                concat_sources.append(normalized)
+
         concat_list = self.config.output_dir / "narration_concat.txt"
         with open(concat_list, "w") as f:
-            for take in takes:
+            for take in concat_sources:
                 f.write(f"file '{take.resolve()}'\n")
 
         combined = self.config.output_dir / "narration_combined.wav"

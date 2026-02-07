@@ -65,11 +65,13 @@ class PipelineConfig:
     
     # Output options
     skip_audio_mux: bool = False
-    music_volume: float = 0.3
+    music_volume: float = 0.15
     music_dir_volume: float = 0.3
     narration_volume: float = 1.0
     audio_bitrate: str = "192k"
     disable_music: bool = False
+    keep_scenes: bool = False
+    normalize_narration: bool = True
 
     # Pexels options
     use_pexels: bool = False
@@ -189,6 +191,8 @@ class PipelineConfig:
             "skip_audio_mux": self.skip_audio_mux,
             "music_volume": self.music_volume,
             "disable_music": self.disable_music,
+            "keep_scenes": self.keep_scenes,
+            "normalize_narration": self.normalize_narration,
             "llm_keyword_extractor": self.llm_keyword_extractor,
             "llm_model_name": self.llm_model_name,
             "llm_quantization": self.llm_quantization,
