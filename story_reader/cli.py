@@ -10,6 +10,8 @@ import re
 
 from .config import PipelineConfig
 
+MUSIC_FILE_PATTERNS = ("*.mp3", "*.m4a", "*.aac", "*.wav", "*.flac", "*.ogg")
+
 
 def check_dependencies() -> bool:
     """Check that required external tools are available."""
@@ -44,6 +46,14 @@ def validate_audio_file(audio_path: Path) -> bool:
         return False
     
     return True
+
+
+def find_music_files(music_dir: Path) -> list[Path]:
+    """Return sorted music files from the directory tree."""
+    tracks = []
+    for pattern in MUSIC_FILE_PATTERNS:
+        tracks.extend(music_dir.rglob(pattern))
+    return sorted(set(tracks))
 
 
 def parse_args() -> argparse.Namespace:
@@ -181,6 +191,11 @@ For more information, see: https://github.com/your-repo/story-reader
         "--use-legnext",
         action="store_true",
         help="Fetch images from Legnext instead of generating locally"
+    )
+    image_source_group.add_argument(
+        "--use-disk",
+        action="store_true",
+        help="Use images from output/images and skip image generation"
     )
 
     # Pexels options
@@ -325,6 +340,7 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         use_paragraphs_file=args.use_paragraphs_file,
         use_pexels=args.use_pexels,
         use_legnext=args.use_legnext,
+        use_disk=args.use_disk,
         pexels_fallback_to_sd=args.sd_fallback,
         pexels_per_page=args.pexels_per_page,
         pexels_min_width=args.pexels_min_width,
@@ -377,10 +393,10 @@ def main() -> int:
         return 0
 
     if not args.no_music and args.music is None:
-        music_files = list(music_dir.rglob("*.mp3"))
+        music_files = find_music_files(music_dir)
         if not music_files:
             print(f"No music files found in {music_dir}")
-            print("Add .mp3 files to this folder or re-run with --no-music.")
+            print("Add music files (.mp3/.m4a/.aac/.wav/.flac/.ogg) or re-run with --no-music.")
             return 0
 
     config = args_to_config(args)
@@ -398,6 +414,8 @@ def main() -> int:
         result = pipeline.run()
         return 0
     except Exception as e:
+        if args.use_disk and "Not enough images found for --use-disk." in str(e):
+            return 0
         print(f"ERROR: Pipeline failed: {e}")
         return 1
 

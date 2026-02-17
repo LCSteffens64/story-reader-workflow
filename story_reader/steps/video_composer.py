@@ -84,31 +84,37 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
             Path to the created clip
         """
         clip_path = self.config.scenes_dir / f"scene_{idx:03d}.mp4"
+        if self.config.keep_scenes and clip_path.exists():
+            print(f"Reusing existing scene {idx+1}: {clip_path.name}")
+            return clip_path
         
         # Build zoompan filter
         max_zoom = self.config.ken_burns_max_zoom
         num_frames = max(int(duration * self.config.fps), 1)
 
-        # Compute speed so we reach max_zoom at the end of the clip
-        zoom_speed = (max_zoom - 1.0) / max(num_frames - 1, 1)
-
-        # Randomize the fixed point for the zoom to avoid awkward crops
+        # Randomize a center-biased focus point for smoother pan paths.
         rng = random.Random(idx)
-        x_focus = rng.uniform(0.3, 0.7)
-        y_focus = rng.uniform(0.3, 0.7)
+        focus_margin = 0.15
+        x_focus = rng.uniform(0.5 - focus_margin, 0.5 + focus_margin)
+        y_focus = rng.uniform(0.5 - focus_margin, 0.5 + focus_margin)
 
         target_w, target_h = target_size
-        scale_pad = (
-            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
-            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color=black"
+        motion_w = target_w * 2
+        motion_h = target_h * 2
+        # Fill the full frame before zooming to avoid pan snap from padded bars.
+        scale_fill = (
+            f"scale={motion_w}:{motion_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={motion_w}:{motion_h}"
         )
+        progress = f"on/{max(num_frames - 1, 1)}"
         zoompan_filter = (
-            f"{scale_pad},"
+            f"{scale_fill},"
             "zoompan="
-            f"z='min(zoom+{zoom_speed},{max_zoom})':"
-            f"x='iw*{x_focus}-(iw/zoom)/2':"
-            f"y='ih*{y_focus}-(ih/zoom)/2':"
-            f"d={num_frames}:s={target_w}x{target_h},"
+            f"z='1+({max_zoom}-1)*(0.5-0.5*cos(PI*{progress}))':"
+            f"x='clip((iw-iw/zoom)*{x_focus},0,iw-iw/zoom)':"
+            f"y='clip((ih-ih/zoom)*{y_focus},0,ih-ih/zoom)':"
+            f"d={num_frames}:s={motion_w}x{motion_h}:fps={self.config.fps},"
+            f"scale={target_w}:{target_h}:flags=lanczos,"
             "vignette=PI/5"
         )
         
@@ -119,7 +125,6 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
             "-i", str(image_path),
             "-vf", zoompan_filter,
             "-t", str(duration),
-            "-r", str(self.config.fps),
             "-pix_fmt", "yuv420p",
             str(clip_path)
         ]

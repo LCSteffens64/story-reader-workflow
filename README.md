@@ -46,7 +46,9 @@ This tool takes spoken narration and automatically:
 │   • Default: Stable Diffusion (local)                         │
 │   • Optional: Pexels (stock photos)                           │
 │   • Optional: Legnext (remote diffusion)                      │
-│   Note: --use-pexels and --use-legnext are mutually exclusive  │
+│   • Optional: Disk images (user-provided)                     │
+│   Note: --use-pexels, --use-legnext, and --use-disk are       │
+│         mutually exclusive                                     │
 └────────┬─────────────────────────────────────────────────────┘
          │
          ├───────────────┬───────────────────────────────┬───────────────┐
@@ -370,7 +372,19 @@ python -m story_reader -i narration.wav --use-legnext --legnext-poll-interval 1.
 | `--legnext-poll-interval` | `2.0` | Polling interval in seconds |
 | `--legnext-timeout` | `180.0` | Job timeout in seconds |
 
-**Note:** `--use-pexels` and `--use-legnext` are mutually exclusive.
+**Note:** `--use-pexels`, `--use-legnext`, and `--use-disk` are mutually exclusive.
+
+### Disk Image Integration
+
+Provide your own images from disk instead of generating/fetching them:
+
+```bash
+python -m story_reader -i narration.wav --use-disk -o output/
+```
+
+On first run with `--use-disk`, the tool initializes `output/<title>/images` and prints
+how many images are required. Add that many images (`.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`)
+to the folder and re-run the same command.
 
 ---
 

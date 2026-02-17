@@ -16,6 +16,7 @@ from .steps import (
     ImageGeneratorStep,
     HybridImageGeneratorStep,
     LegnextImageGeneratorStep,
+    DiskImageGeneratorStep,
     ImageUpscalerStep,
     UpscaleMethod,
     VideoComposerStep,
@@ -43,6 +44,8 @@ class StoryReaderPipeline:
         ```
     """
     
+    _MUSIC_EXTENSIONS = ("*.mp3", "*.m4a", "*.aac", "*.wav", "*.flac", "*.ogg")
+
     def __init__(self, config: PipelineConfig):
         """
         Initialize the pipeline with configuration.
@@ -79,8 +82,11 @@ class StoryReaderPipeline:
         if not self.config.scenes_dir.exists():
             self.config.scenes_dir.mkdir(parents=True, exist_ok=True)
 
+        # Keep user-supplied images for --use-disk.
+        if self.config.use_disk:
+            self.config.images_dir.mkdir(parents=True, exist_ok=True)
         # Preserve images when cache is enabled to allow resuming
-        if self.config.images_dir.exists():
+        elif self.config.images_dir.exists():
             if not self.config.use_cache or self.config.clear_cache:
                 shutil.rmtree(self.config.images_dir)
                 self.config.images_dir.mkdir(parents=True, exist_ok=True)
@@ -92,11 +98,19 @@ class StoryReaderPipeline:
         self.transcriber = TranscriberStep(self.config, self.cache)
         self.segmenter = SegmenterStep(self.config, self.cache)
 
-        if self.config.use_legnext and self.config.use_pexels:
-            raise ValueError("Image sources are mutually exclusive: use only one of --use-legnext or --use-pexels.")
+        sources_enabled = sum(
+            [self.config.use_legnext, self.config.use_pexels, self.config.use_disk]
+        )
+        if sources_enabled > 1:
+            raise ValueError(
+                "Image sources are mutually exclusive: use only one of "
+                "--use-legnext, --use-pexels, or --use-disk."
+            )
         
-        # Choose image source (Legnext, Pexels, or Stable Diffusion)
-        if self.config.use_legnext:
+        # Choose image source (Disk, Legnext, Pexels, or Stable Diffusion)
+        if self.config.use_disk:
+            self.image_generator = DiskImageGeneratorStep(self.config, self.cache)
+        elif self.config.use_legnext:
             self.image_generator = LegnextImageGeneratorStep(self.config, self.cache)
         elif self.config.use_pexels:
             self.image_generator = HybridImageGeneratorStep(self.config, self.cache)
@@ -245,7 +259,10 @@ class StoryReaderPipeline:
         if not music_dir.exists() or not music_dir.is_dir():
             return
 
-        tracks = sorted(music_dir.rglob("*.mp3"))
+        tracks = []
+        for pattern in self._MUSIC_EXTENSIONS:
+            tracks.extend(music_dir.rglob(pattern))
+        tracks = sorted(set(tracks))
         if not tracks:
             return
 
@@ -258,14 +275,16 @@ class StoryReaderPipeline:
             for track in tracks:
                 f.write(f"file '{track.resolve()}'\n")
 
-        combined = self.config.output_dir / "music_combined.mp3"
+        combined = self.config.output_dir / "music_combined.m4a"
         cmd = [
             "ffmpeg",
             "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list),
-            "-c", "copy",
+            "-vn",
+            "-c:a", "aac",
+            "-b:a", self.config.audio_bitrate,
             str(combined)
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)

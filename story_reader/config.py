@@ -72,6 +72,10 @@ class PipelineConfig:
     disable_music: bool = False
     keep_scenes: bool = False
     normalize_narration: bool = True
+    duck_threshold: float = 0.06
+    duck_ratio: float = 3.0
+    duck_attack_ms: float = 45.0
+    duck_release_ms: float = 300.0
 
     # Pexels options
     use_pexels: bool = False
@@ -85,6 +89,9 @@ class PipelineConfig:
     use_legnext: bool = False
     legnext_poll_interval_sec: float = 2.0
     legnext_timeout_sec: float = 180.0
+
+    # Disk image options
+    use_disk: bool = False
     
     
     # LLM keyword extraction settings
@@ -193,6 +200,10 @@ class PipelineConfig:
             "disable_music": self.disable_music,
             "keep_scenes": self.keep_scenes,
             "normalize_narration": self.normalize_narration,
+            "duck_threshold": self.duck_threshold,
+            "duck_ratio": self.duck_ratio,
+            "duck_attack_ms": self.duck_attack_ms,
+            "duck_release_ms": self.duck_release_ms,
             "llm_keyword_extractor": self.llm_keyword_extractor,
             "llm_model_name": self.llm_model_name,
             "llm_quantization": self.llm_quantization,
@@ -206,6 +217,7 @@ class PipelineConfig:
             "use_legnext": self.use_legnext,
             "legnext_poll_interval_sec": self.legnext_poll_interval_sec,
             "legnext_timeout_sec": self.legnext_timeout_sec,
+            "use_disk": self.use_disk,
         }
     
     @classmethod

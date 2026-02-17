@@ -25,6 +25,7 @@ class AudioMixerStep(PipelineStep[Path, Path]):
     
     name = "audio_mux"
     description = "Mix narration and background music into video"
+    _MUSIC_EXTENSIONS = ("*.mp3", "*.m4a", "*.aac", "*.wav", "*.flac", "*.ogg")
     
     def __init__(self, config: PipelineConfig, cache: CacheManager):
         super().__init__(config, cache)
@@ -100,11 +101,19 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         narration_vol = self.config.narration_volume
         music_vol = music_volume
         
-        # FFmpeg filter complex to mix audio tracks
+        duck_threshold = self.config.duck_threshold
+        duck_ratio = self.config.duck_ratio
+        duck_attack_ms = self.config.duck_attack_ms
+        duck_release_ms = self.config.duck_release_ms
+
+        # Sidechain-compress music using narration as the key signal, then mix.
         filter_complex = (
-            f"[1:a]volume={narration_vol}[narration];"
-            f"[2:a]volume={music_vol}[music];"
-            f"[narration][music]amix=inputs=2:duration=first[aout]"
+            f"[1:a]volume={narration_vol},aresample=48000,asplit=2[narration_sc][narration_mix];"
+            f"[2:a]volume={music_vol},aresample=48000[music];"
+            f"[music][narration_sc]sidechaincompress="
+            f"threshold={duck_threshold}:ratio={duck_ratio}:"
+            f"attack={duck_attack_ms}:release={duck_release_ms}:makeup=1[ducked];"
+            f"[narration_mix][ducked]amix=inputs=2:duration=first:normalize=0[aout]"
         )
         
         cmd = [
@@ -133,9 +142,12 @@ class AudioMixerStep(PipelineStep[Path, Path]):
         if not music_dir.exists() or not music_dir.is_dir():
             print(f"Music dir not found: {music_dir}")
             return None
-        tracks = sorted(music_dir.rglob("*.mp3"))
+        tracks = []
+        for pattern in self._MUSIC_EXTENSIONS:
+            tracks.extend(music_dir.rglob(pattern))
+        tracks = sorted(set(tracks))
         if not tracks:
-            print(f"No .mp3 files found under: {music_dir}")
+            print(f"No supported music files found under: {music_dir}")
             return None
         print(f"Using background music from {tracks[0].name}")
         return tracks[0]
