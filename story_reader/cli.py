@@ -64,10 +64,10 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m story_reader -i narration.wav -o output/
-  python -m story_reader --input my_story.mp3 --output results/
-  python -m story_reader -i narration.wav -m background.mp3 -o output/
-  python -m story_reader --clear-cache  # Clear cached data
+  python -m story_reader -i narration.wav -o output/ --title "My Video"
+  python -m story_reader --input my_story.mp3 --output results/ --title "My Story"
+  python -m story_reader -i narration.wav -m background.mp3 -o output/ --title "Episode 1"
+  python -m story_reader --clear-cache --title "Retry"  # Clear cached data
 
 For more information, see: https://github.com/your-repo/story-reader
         """
@@ -85,6 +85,12 @@ For more information, see: https://github.com/your-repo/story-reader
         type=Path,
         default=Path("output"),
         help="Output directory (default: output/)"
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        required=True,
+        help='Video title (required), e.g. --title "video"'
     )
     
     # Audio options
@@ -357,10 +363,10 @@ def main() -> int:
     """Main entry point for CLI."""
     args = parse_args()
 
-    # Prompt for video title on invocation
-    title = input("Video title: ").strip()
+    title = args.title.strip()
     if not title:
-        title = "untitled"
+        print("ERROR: --title cannot be empty.")
+        return 1
 
     legnext_tone_keywords = None
     if args.use_legnext:
