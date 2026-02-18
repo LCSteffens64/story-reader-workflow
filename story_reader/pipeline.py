@@ -21,6 +21,7 @@ from .steps import (
     UpscaleMethod,
     VideoComposerStep,
     AudioMixerStep,
+    TranscriptVerifierStep,
 )
 
 
@@ -133,6 +134,7 @@ class StoryReaderPipeline:
         
         self.video_composer = VideoComposerStep(self.config, self.cache)
         self.audio_mixer = AudioMixerStep(self.config, self.cache)
+        self.transcript_verifier = TranscriptVerifierStep(self.config, self.cache)
     
     def run(self) -> Path:
         """
@@ -180,6 +182,18 @@ class StoryReaderPipeline:
         else:
             final_video = visuals_video
             print("Skipped audio muxing (--no-audio flag)")
+
+        # Step 6: Transcript verification QR overlay (always attempted for final_video.mp4)
+        if final_video.name == "final_video.mp4":
+            try:
+                final_video = self.transcript_verifier.execute(final_video)
+            except Exception as e:
+                print(
+                    "Transcript verification failed; keeping unverified final_video.mp4 intact. "
+                    f"Reason: {e}"
+                )
+        else:
+            print("Skipped transcript verification QR (not a final_video.mp4 artifact)")
         
         print("-" * 50)
         print(f"Pipeline complete! Output: {final_video}")

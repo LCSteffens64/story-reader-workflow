@@ -12,6 +12,7 @@ from .disk_image_generator import DiskImageGeneratorStep
 from .image_upscaler import ImageUpscalerStep, UpscaleMethod
 from .video_composer import VideoComposerStep
 from .audio_mixer import AudioMixerStep
+from .transcript_verifier import TranscriptVerifierStep
 
 __all__ = [
     "PipelineStep",
@@ -25,4 +26,5 @@ __all__ = [
     "UpscaleMethod",
     "VideoComposerStep",
     "AudioMixerStep",
+    "TranscriptVerifierStep",
 ]

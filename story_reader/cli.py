@@ -302,6 +302,11 @@ For more information, see: https://github.com/your-repo/story-reader
         action="store_true",
         help="Keep existing scenes and skip clearing output/<title>/scenes"
     )
+    parser.add_argument(
+        "--verify-existing",
+        action="store_true",
+        help="Skip generation and only apply transcript verification QR to existing output/<title>/final_video.mp4"
+    )
     
     # Misc options
     parser.add_argument(
@@ -384,13 +389,43 @@ def main() -> int:
     # Validate dependencies
     if not check_dependencies():
         return 1
-    
-    # Create config from args
+
     # Initialize per-title folders for narration and music
     narration_dir = (args.output / "narration").resolve()
     music_dir = (args.output / "music").resolve()
     narration_dir.mkdir(parents=True, exist_ok=True)
     music_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create config from args
+    config = args_to_config(args)
+    config.video_title = title
+    config.narration_dir = narration_dir
+    config.music_dir = music_dir
+    config.disable_music = args.no_music
+    config.legnext_tone_keywords = legnext_tone_keywords
+
+    if args.verify_existing:
+        from .core.cache import NullCacheManager
+        from .steps import TranscriptVerifierStep
+
+        existing_video = config.output_dir / "final_video.mp4"
+        if not existing_video.exists():
+            print(f"ERROR: Existing final video not found: {existing_video}")
+            return 1
+        if not config.paragraphs_file.exists():
+            print(f"ERROR: paragraphs file not found: {config.paragraphs_file}")
+            return 1
+
+        try:
+            verifier = TranscriptVerifierStep(config, NullCacheManager())
+            verifier.execute(existing_video)
+            return 0
+        except Exception as e:
+            print(
+                "ERROR: Verification overlay failed; existing final_video.mp4 left unchanged. "
+                f"Reason: {e}"
+            )
+            return 1
 
     narration_files = list(narration_dir.glob("*.wav"))
     if not narration_files:
@@ -404,13 +439,6 @@ def main() -> int:
             print(f"No music files found in {music_dir}")
             print("Add music files (.mp3/.m4a/.aac/.wav/.flac/.ogg) or re-run with --no-music.")
             return 0
-
-    config = args_to_config(args)
-    config.video_title = title
-    config.narration_dir = narration_dir
-    config.music_dir = music_dir
-    config.disable_music = args.no_music
-    config.legnext_tone_keywords = legnext_tone_keywords
     
     # Import pipeline here to avoid slow imports on --help
     from .pipeline import StoryReaderPipeline

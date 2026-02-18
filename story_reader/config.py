@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple
 import os
+import re
 
 
 @dataclass
@@ -92,6 +93,14 @@ class PipelineConfig:
 
     # Disk image options
     use_disk: bool = False
+
+    # Transcript verification overlay (always attempted on final_video.mp4)
+    signing_key_fingerprint: Optional[str] = None
+    signer_pubkey_url: Optional[str] = None
+    qr_intro_frames: int = 10
+    qr_outro_seconds: float = 10.0
+    qr_width_ratio: float = 0.35
+    qr_margin_px: int = 24
     
     
     # LLM keyword extraction settings
@@ -132,6 +141,10 @@ class PipelineConfig:
 
         if self.legnext_api_key is None:
             self.legnext_api_key = os.environ.get("LEGNEXT_API_KEY")
+        if self.signing_key_fingerprint is None:
+            self.signing_key_fingerprint = os.environ.get("STORY_READER_SIGNING_KEY")
+        if self.signer_pubkey_url is None:
+            self.signer_pubkey_url = os.environ.get("STORY_READER_PUBKEY_URL")
     
     @property
     def jobs_file(self) -> Path:
@@ -156,7 +169,14 @@ class PipelineConfig:
     @property
     def paragraphs_file(self) -> Path:
         """Path to the paragraphs JSON file."""
-        return self.output_dir / "paragraphs.json"
+        title = (self.video_title or "").strip()
+        if not title:
+            return self.output_dir / "paragraphs.json"
+
+        safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", title).strip("_").lower()
+        if not safe_title:
+            safe_title = "untitled"
+        return self.output_dir / f"paragraphs_{safe_title}.json"
     
     def get_image_prompt(self, text: str) -> str:
         """Generate an image prompt from paragraph text."""
@@ -218,6 +238,12 @@ class PipelineConfig:
             "legnext_poll_interval_sec": self.legnext_poll_interval_sec,
             "legnext_timeout_sec": self.legnext_timeout_sec,
             "use_disk": self.use_disk,
+            "signing_key_fingerprint": self.signing_key_fingerprint,
+            "signer_pubkey_url": self.signer_pubkey_url,
+            "qr_intro_frames": self.qr_intro_frames,
+            "qr_outro_seconds": self.qr_outro_seconds,
+            "qr_width_ratio": self.qr_width_ratio,
+            "qr_margin_px": self.qr_margin_px,
         }
     
     @classmethod
