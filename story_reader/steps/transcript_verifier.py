@@ -142,7 +142,7 @@ class TranscriptVerifierStep(PipelineStep[Path, Path]):
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=width,height",
+            "stream=width,height,duration",
             "-show_entries",
             "format=duration",
             "-of",
@@ -157,7 +157,19 @@ class TranscriptVerifierStep(PipelineStep[Path, Path]):
         if not streams:
             raise RuntimeError(f"No video streams found in: {video_path}")
         width = int(streams[0]["width"])
-        duration = float(data["format"]["duration"])
+        stream_duration_raw = streams[0].get("duration")
+        format_duration_raw = data.get("format", {}).get("duration")
+
+        # Prefer the selected video stream duration for overlay timing.
+        # Container/format duration may track audio and run longer.
+        duration = None
+        if stream_duration_raw not in (None, "N/A"):
+            duration = float(stream_duration_raw)
+        elif format_duration_raw not in (None, "N/A"):
+            duration = float(format_duration_raw)
+        else:
+            raise RuntimeError(f"Unable to resolve video duration for: {video_path}")
+
         return {"width": width, "duration": duration}
 
     def _build_qr(self, payload_json: str, qr_path: Path, video_width: int) -> None:
