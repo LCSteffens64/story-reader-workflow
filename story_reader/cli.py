@@ -242,6 +242,11 @@ For more information, see: https://github.com/your-repo/story-reader
         default=180.0,
         help="Legnext job timeout in seconds (default: 180.0)"
     )
+    parser.add_argument(
+        "--legnext-tile",
+        action="store_true",
+        help="After all Legnext calls finish, prompt once per stitched still to choose tile 1, 2, 3, or 4"
+    )
     
     # Upscaling options
     parser.add_argument(
@@ -267,6 +272,11 @@ For more information, see: https://github.com/your-repo/story-reader
         type=float,
         default=1.2,
         help="Sharpness enhancement after upscaling (1.0 = no change, default: 1.2)"
+    )
+    parser.add_argument(
+        "--pillar",
+        action="store_true",
+        help="Start Ken Burns from a height-fit, pillarboxed frame instead of fill-cropping"
     )
     
     # Cache options
@@ -343,6 +353,7 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         upscale_factor=args.upscale_factor,
         upscale_method=args.upscale_method,
         upscale_sharpness=args.sharpen,
+        ken_burns_pillarbox=args.pillar,
         clear_cache=args.clear_cache,
         use_cache=not args.no_cache,
         llm_keyword_extractor=args.llm_keywords,
@@ -358,6 +369,7 @@ def args_to_config(args: argparse.Namespace) -> PipelineConfig:
         pexels_min_height=args.pexels_min_height,
         legnext_poll_interval_sec=args.legnext_poll_interval,
         legnext_timeout_sec=args.legnext_timeout,
+        legnext_tile_prompt=args.legnext_tile,
         narration_dir=Path("narration"),
         keep_scenes=args.keep_scenes,
         normalize_narration=args.normalize_narration,

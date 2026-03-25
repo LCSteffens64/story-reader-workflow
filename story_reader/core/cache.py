@@ -240,8 +240,15 @@ class NullCacheManager:
     
     def get_cached_image(self, paragraph_text: str, idx: int, output_dir: Path) -> None:
         return None
-    
-    def save_image_cache(self, paragraph_text: str, idx: int, image_path: Path) -> None:
+
+    def get_image_cache_entry(self, paragraph_text: str, idx: int) -> None:
+        return None
+
+    def get_image_cache_key(self, paragraph_text: str, idx: int) -> str:
+        text_hash = compute_text_hash(paragraph_text)
+        return f"image_{idx:03d}_{text_hash}"
+
+    def save_image_cache(self, paragraph_text: str, idx: int, image_path: Path, metadata=None) -> None:
         pass
     
     def clear(self) -> None:

@@ -51,6 +51,7 @@ class PipelineConfig:
     fps: int = 25
     ken_burns_zoom_speed: float = 0.0004
     ken_burns_max_zoom: float = 1.08
+    ken_burns_pillarbox: bool = False
     video_padding_sec: float = 0.5
     
     # Caching options
@@ -90,6 +91,7 @@ class PipelineConfig:
     use_legnext: bool = False
     legnext_poll_interval_sec: float = 2.0
     legnext_timeout_sec: float = 180.0
+    legnext_tile_prompt: bool = False
 
     # Disk image options
     use_disk: bool = False
@@ -214,6 +216,7 @@ class PipelineConfig:
             "max_sentences": self.max_sentences,
             "fps": self.fps,
             "ken_burns_zoom_speed": self.ken_burns_zoom_speed,
+            "ken_burns_pillarbox": self.ken_burns_pillarbox,
             "use_cache": self.use_cache,
             "skip_audio_mux": self.skip_audio_mux,
             "music_volume": self.music_volume,
@@ -237,6 +240,7 @@ class PipelineConfig:
             "use_legnext": self.use_legnext,
             "legnext_poll_interval_sec": self.legnext_poll_interval_sec,
             "legnext_timeout_sec": self.legnext_timeout_sec,
+            "legnext_tile_prompt": self.legnext_tile_prompt,
             "use_disk": self.use_disk,
             "signing_key_fingerprint": self.signing_key_fingerprint,
             "signer_pubkey_url": self.signer_pubkey_url,

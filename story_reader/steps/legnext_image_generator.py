@@ -38,45 +38,41 @@ class LegnextImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
         super().__init__(config, cache)
 
     def run(self, paragraphs: List[Dict[str, Any]]) -> List[Path]:
-        image_paths: List[Path] = []
-
+        sources: List[Dict[str, Any]] = []
         for idx, para in enumerate(paragraphs):
-            img_path = self.generate_for_paragraph(para, idx, total=len(paragraphs))
+            source = self.generate_for_paragraph(para, idx, total=len(paragraphs))
+            sources.append(source)
+
+        image_paths: List[Path] = []
+        if self.config.legnext_tile_prompt:
+            print("Legnext tile selection: 1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right")
+
+        for idx, (para, source) in enumerate(zip(paragraphs, sources)):
+            img_path = self._materialize_image(source, para, idx, total=len(paragraphs))
             image_paths.append(img_path)
 
         print(f"Generated {len(image_paths)} images (Legnext)")
         return image_paths
 
-    def generate_for_paragraph(self, para: Dict[str, Any], idx: int, total: int = 1) -> Path:
+    def generate_for_paragraph(self, para: Dict[str, Any], idx: int, total: int = 1) -> Dict[str, Any]:
         cache_entry = self.cache.get_image_cache_entry(para["text"], idx)
         if cache_entry:
             cached_path = Path(cache_entry.get("path", ""))
             if cached_path.exists() and cache_entry.get("stitched"):
-                stitched_bytes = cached_path.read_bytes()
-                tile_bytes = self._crop_random_tile(stitched_bytes)
-                img_path = self.config.images_dir / f"{idx:03d}.png"
-                img_path.write_bytes(tile_bytes)
                 print(f"Using cached stitched image for paragraph {idx}")
-                return img_path
+                return {"path": cached_path, "stitched": True}
             if cached_path.exists():
-                img_path = self.config.images_dir / f"{idx:03d}.png"
-                if cached_path != img_path:
-                    shutil.copy(cached_path, img_path)
                 print(f"Using cached image for paragraph {idx}")
-                return img_path
+                return {"path": cached_path, "stitched": False}
 
         cached_path = self.cache.get_cached_image(
             para["text"], idx, self.config.images_dir
         )
         if cached_path is not None:
             if cached_path.name.endswith("-stitched.png") or cached_path.name.endswith("_stitched.png"):
-                stitched_bytes = cached_path.read_bytes()
-                tile_bytes = self._crop_random_tile(stitched_bytes)
-                img_path = self.config.images_dir / f"{idx:03d}.png"
-                img_path.write_bytes(tile_bytes)
                 print(f"Using cached stitched image for paragraph {idx}")
-                return img_path
-            return cached_path
+                return {"path": cached_path, "stitched": True}
+            return {"path": cached_path, "stitched": False}
 
         api_key = self.config.legnext_api_key
         if not api_key:
@@ -94,23 +90,57 @@ class LegnextImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
         if stitched is not None:
             stitched_bytes = self._load_image_from_string(stitched)
             stitched_path = self._write_stitched_cache(para["text"], idx, stitched_bytes)
-            tile_bytes = self._crop_random_tile(stitched_bytes)
-            img_path = self.config.images_dir / f"{idx:03d}.png"
-            img_path.write_bytes(tile_bytes)
             self.cache.save_image_cache(
                 para["text"],
                 idx,
                 stitched_path,
                 metadata={"stitched": True},
             )
-            return img_path
+            return {"path": stitched_path, "stitched": True}
 
         image_bytes = self._extract_image_bytes(result)
-        img_path = self.config.images_dir / f"{idx:03d}.png"
-        img_path.write_bytes(image_bytes)
+        source_path = self.config.cache_dir / f"legnext_{idx:03d}.png"
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(image_bytes)
 
-        self.cache.save_image_cache(para["text"], idx, img_path)
+        self.cache.save_image_cache(para["text"], idx, source_path)
+        return {"path": source_path, "stitched": False}
+
+    def _materialize_image(
+        self,
+        source: Dict[str, Any],
+        para: Dict[str, Any],
+        idx: int,
+        total: int,
+    ) -> Path:
+        source_path = Path(source["path"])
+        img_path = self.config.images_dir / f"{idx:03d}.png"
+
+        if source.get("stitched"):
+            stitched_bytes = source_path.read_bytes()
+            tile_number = None
+            if self.config.legnext_tile_prompt:
+                tile_number = self._prompt_for_tile(idx, total, para["text"])
+            tile_bytes = self._crop_tile(stitched_bytes, tile_number=tile_number)
+            img_path.write_bytes(tile_bytes)
+            return img_path
+
+        if source_path != img_path:
+            shutil.copy(source_path, img_path)
         return img_path
+
+    def _prompt_for_tile(self, idx: int, total: int, text: str) -> int:
+        preview = " ".join(text.split())
+        if len(preview) > 90:
+            preview = preview[:87] + "..."
+
+        print()
+        print(f"Still {idx+1}/{total}: {preview}")
+        while True:
+            choice = input("Choose tile [1=top-left, 2=top-right, 3=bottom-left, 4=bottom-right]: ").strip()
+            if choice in {"1", "2", "3", "4"}:
+                return int(choice)
+            print("Please enter 1, 2, 3, or 4.")
 
     def _submit_job(self, api_key: str, prompt: str) -> str:
         headers = {
@@ -217,11 +247,12 @@ class LegnextImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
 
     def _write_stitched_cache(self, text: str, idx: int, stitched_bytes: bytes) -> Path:
         cache_key = self.cache.get_image_cache_key(text, idx)
+        self.config.cache_dir.mkdir(parents=True, exist_ok=True)
         stitched_path = self.config.cache_dir / f"{cache_key}_stitched.png"
         stitched_path.write_bytes(stitched_bytes)
         return stitched_path
 
-    def _crop_random_tile(self, stitched_bytes: bytes) -> bytes:
+    def _crop_tile(self, stitched_bytes: bytes, tile_number: Optional[int] = None) -> bytes:
         try:
             img = Image.open(BytesIO(stitched_bytes)).convert("RGB")
         except Exception as e:
@@ -241,12 +272,22 @@ class LegnextImageGeneratorStep(PipelineStep[List[Dict[str, Any]], List[Path]]):
             (tile_w, tile_h, tile_w * 2, tile_h * 2),
         ]
 
-        box = self._pick_nonempty_tile(img, tiles)
+        box = self._select_tile_box(img, tiles, tile_number=tile_number)
         tile = img.crop(box)
 
         out = BytesIO()
         tile.save(out, format="PNG")
         return out.getvalue()
+
+    def _select_tile_box(
+        self,
+        img: Image.Image,
+        tiles: List[tuple],
+        tile_number: Optional[int] = None,
+    ) -> tuple:
+        if tile_number is not None:
+            return tiles[tile_number - 1]
+        return self._pick_nonempty_tile(img, tiles)
 
     def _pick_nonempty_tile(self, img: Image.Image, tiles: List[tuple]) -> tuple:
         """

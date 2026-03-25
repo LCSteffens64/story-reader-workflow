@@ -101,14 +101,21 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
         target_w, target_h = target_size
         motion_w = target_w * 2
         motion_h = target_h * 2
-        # Fill the full frame before zooming to avoid pan snap from padded bars.
-        scale_fill = (
-            f"scale={motion_w}:{motion_h}:force_original_aspect_ratio=increase:flags=lanczos,"
-            f"crop={motion_w}:{motion_h}"
-        )
+        if self.config.ken_burns_pillarbox:
+            # Start from a height-fit frame and pad the sides so zoom begins pillarboxed.
+            scale_prep = (
+                f"scale=-2:{motion_h}:flags=lanczos,"
+                f"pad={motion_w}:{motion_h}:(ow-iw)/2:(oh-ih)/2"
+            )
+        else:
+            # Fill the full frame before zooming to avoid pan snap from padded bars.
+            scale_prep = (
+                f"scale={motion_w}:{motion_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+                f"crop={motion_w}:{motion_h}"
+            )
         progress = f"on/{max(num_frames - 1, 1)}"
         zoompan_filter = (
-            f"{scale_fill},"
+            f"{scale_prep},"
             "zoompan="
             f"z='1+({max_zoom}-1)*(0.5-0.5*cos(PI*{progress}))':"
             f"x='clip((iw-iw/zoom)*{x_focus},0,iw-iw/zoom)':"
@@ -160,7 +167,7 @@ class VideoComposerStep(PipelineStep[Tuple[List[Path], List[Dict[str, Any]]], Pa
 
     def _ensure_tile_image(self, image_path: Path, idx: int) -> Path:
         """
-        If image is a stitched 2x2 grid, crop a random tile and save as a normal frame.
+        If image is a stitched 2x2 grid, crop the configured tile and save as a normal frame.
         """
         name = image_path.name
         if not (name.endswith("-stitched.png") or name.endswith("_stitched.png")):
